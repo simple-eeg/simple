@@ -5,7 +5,7 @@
 %   This script processes a list of EEG .set files in a clear four-block flow:
 %     A) Continuous-data cleaning (re-reference, resample, band-pass, line-noise)
 %     B) Delete unwanted events (e.g., events labeled 'NA')
-%     C) Add per-source dummy/offset events (e.g., *_prestim at -2000 ms)
+%     C) Add per-source dummy/offset events (e.g., *_prestim at -1500 ms)
 %     D) Epoch and baseline
 %
 %   The script prints concise progress and outcomes to the Command Window and embeds
@@ -226,7 +226,7 @@ for idx = 1:totalToDo
         % -------------------------------------------------------------------------------------------------------
 
 
-        % --------------- Block C — Add per-source dummy/offset events (e.g., *_prestim at -2000 ms) ------------
+        % --------------- Block C — Add per-source dummy/offset events (e.g., *_prestim at -1500 ms) ------------
         if PreprocOptions.offsetevents
             [EEG_clean, repAdd] = add_offset_events( ...
                 EEG_clean, ...
