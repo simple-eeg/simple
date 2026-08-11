@@ -6,7 +6,7 @@ A MATLAB workflow for auditable, offline, group-level analysis of event-related 
 
 ## Repository overview
 
-This repository implements a structured workflow for event-related EEG settings in which each participant contributes a single event-related epoch and spatial sampling is minimal. In this regime, standard stabilisers such as trial averaging and multichannel redundancy are absent or limited, so preprocessing choices, epoch definition, screening decisions, and dataset-level plausibility checks become unusually important.
+This repository implements a structured workflow for event-related EEG in which the core low-redundancy processing unit is one analysed event–channel instance: one event and one channel, without trial averaging or multichannel redundancy. Group-level inference is a separate design layer and requires either one prespecified participant-level contribution or a method that accounts for repeated observations. In this regime, preprocessing choices, epoch definition, screening decisions, and dataset-level plausibility checks become unusually important.
 
 The repository is written in MATLAB and is organised as a five-step workflow:
 
@@ -120,6 +120,8 @@ subjectID,sessionID,runID,path_raw,EEGfile_raw
 ### Path editing
 
 The scripts currently use project paths such as `baseDir` or `root` defined within the scripts themselves. You should review and edit these paths to match your local setup before running the workflow.
+
+The seven Step 5 post-core-guardrail scripts are an exception: they resolve the project root from their own direct membership in this repository's `scripts/` directory and fail closed if that relationship or their required local inputs/helpers cannot be established. They do not contain a personal fallback root. Their event, channel, NRF, time-window, and output-name settings remain explicit exemplar defaults that must be reviewed for a new project.
 
 ### Running scripts from the `scripts` folder
 
@@ -425,9 +427,18 @@ Scripts:
 
 ### Main outputs
 
-This stage mainly produces figures, workspace objects, and console summaries. One script also writes excluded-item PNG files:
+This stage mainly produces figures, workspace objects, console summaries, and per-script Command Window logs. Step 5.1 writes a rollback-safe, verified excluded-item PNG batch:
 
 - `data/summary/screening/excluded_epochs/`
+
+Steps 5.2–5.5 are display-only apart from their logs. Steps 5.6 and 5.7 atomically write machine-readable paired results using schema `simple-paired-separation-result-v2`:
+
+- `data/summary/screening/step_5_check_6_sep_check_qc_result.mat`
+- `data/summary/screening/step_5_check_7_sep_check_nrf_result.mat`
+
+The paired checks preserve the framework's event–channel/recording-level unit, form each complete `true - internal reference` difference first, and support only the paired median or paired mean with a paired BCa bootstrap interval. Participant reduction is not introduced in Step 5. The current event, NRF, ROI, and overlay choices are labelled exemplar defaults, not universal framework requirements.
+
+Steps 5.2 and 5.3 do not launch EEGLAB, SIMPLE, or a template-path initialiser. Configure the required NRF templates so each active basename resolves to exactly one `.mat` file before running; Step 5.3 also accepts an explicit template path and fails closed if resolution is missing or ambiguous.
 
 ### Relation to the framework
 
@@ -466,8 +477,8 @@ This workflow includes several manual decision points.
 ### During Step 5
 
 - inspect excluded and included items
-- review average TS/TF/PSD plots
-- review paired separation checks for QC and NRF metrics
+- review the configured Simple, NRF-shifted, or Woody average time-series view and the TF/PSD views
+- review paired separation checks for QC and NRF metrics and their schema-v2 result files
 
 ## Key outputs produced by the workflow
 
