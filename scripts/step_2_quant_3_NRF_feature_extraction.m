@@ -25,11 +25,11 @@
 %   - EEG list: data_lists/dataset_list.csv
 %          columns: EEGfile_processed, path_processed
 
-log_command_window('start');
 clear; clc;
 
-%% --- User-configurable paths & settings (edit here) ---
-baseDir         = '/Users/lukebaxter/pipeline_paper/simple-framework';
+%% --- Repository-derived paths and explicit analysis settings ---
+baseDir         = resolve_framework_project('step_2_quant_3_NRF_feature_extraction.m');
+log_command_window('start');
 config_path     = fullfile(baseDir, 'data_lists', 'nrf_config.ini');
 epoch_csv       = fullfile(baseDir, 'data', 'info', 'epoch_types', 'epoch_type_summary.csv');
 dataListPath    = fullfile(baseDir, 'data_lists', 'dataset_list.csv');
@@ -44,6 +44,14 @@ if exist(functionsFolder, 'dir'); addpath(functionsFolder); end
 
 eeglab; % adds EEGLAB + SIMPLE; SIMPLE puts its NRFs folder on the MATLAB path
 assert(exist('pop_estimate_response','file') == 2, 'pop_estimate_response.m not found on path.');
+addpath(functionsFolder, '-begin');
+clear NRFUtils
+resolvedNRFUtils = which('NRFUtils');
+expectedNRFUtils = fullfile(functionsFolder, 'NRFUtils.m');
+assert(~isempty(resolvedNRFUtils) && ...
+    strcmp(char(java.io.File(resolvedNRFUtils).getCanonicalPath()), ...
+           char(java.io.File(expectedNRFUtils).getCanonicalPath())), ...
+    'Repository-local NRFUtils.m could not be resolved deterministically.');
 assert(exist('NRFUtils','class') == 8, 'NRFUtils.m not found or not on path.');
 
 %% --- Parse & validate INI profiles ---
@@ -52,6 +60,25 @@ profiles = NRFUtils.validateProfiles(profiles); % adds p.proj_scalar and enforce
 
 %% --- Read CSV mapping: Type -> profileName (per family) ---
 map = NRFUtils.readEpochTypeMapping(epoch_csv, profiles, families);
+
+% Resolve every template referenced by the mapping before any dataset can be
+% modified. Profiles may share a template, so preflight each basename once.
+mappedProfileNames = {};
+for f = 1:numel(families)
+    mappedProfileNames = [mappedProfileNames, values(map.(families{f}))]; %#ok<AGROW>
+end
+mappedProfileNames = unique(mappedProfileNames, 'stable');
+activeNRFNames = cell(size(mappedProfileNames));
+for pIdx = 1:numel(mappedProfileNames)
+    activeNRFNames{pIdx} = profiles.(mappedProfileNames{pIdx}).NRFName;
+end
+activeNRFNames = unique(activeNRFNames, 'stable');
+for nIdx = 1:numel(activeNRFNames)
+    [logicalName, templateFile] = NRFUtils.resolveTemplateFile(activeNRFNames{nIdx});
+    assert(strcmp(logicalName, activeNRFNames{nIdx}), ...
+        'Configured NRFName must be a logical basename without a path or extension.');
+    fprintf('NRF template: %s -> %s\n', logicalName, templateFile);
+end
 
 %% --- Load EEG dataset list ---
 fprintf('Loading dataset list: %s\n', dataListPath);
@@ -232,3 +259,39 @@ fprintf('Files processed: %d | Files saved: %d | Epochs seen: %d | Fits written:
     files_processed, files_saved, total_epochs_seen, total_fits_done);
 
 log_command_window('stop');
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
+end
+end

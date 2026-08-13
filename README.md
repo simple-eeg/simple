@@ -119,15 +119,94 @@ subjectID,sessionID,runID,path_raw,EEGfile_raw
 
 ### Path editing
 
-The scripts currently use project paths such as `baseDir` or `root` defined within the scripts themselves. You should review and edit these paths to match your local setup before running the workflow.
-
-The seven Step 5 post-core-guardrail scripts are an exception: they resolve the project root from their own direct membership in this repository's `scripts/` directory and fail closed if that relationship or their required local inputs/helpers cannot be established. They do not contain a personal fallback root. Their event, channel, NRF, time-window, and output-name settings remain explicit exemplar defaults that must be reviewed for a new project.
+Do not edit a personal absolute project path into the scripts. All 21 runnable
+scripts resolve the project root from their own direct membership in this
+repository's `scripts/` directory and fail closed if that relationship or the
+required repository-local helpers cannot be established. Event, channel, NRF,
+time-window, and output-name settings remain explicit configuration and must be
+reviewed deliberately for any project other than the demonstrator described
+below.
 
 ### Running scripts from the `scripts` folder
 
 It is recommended to run the workflow from within the `scripts` folder, or otherwise ensure that `scripts/` is on the MATLAB path.
 
 This matters because the helper `log_command_window.m` lives in `scripts/` and is called at the start and end of the runnable scripts.
+
+## Fixed synthetic-demonstrator route
+
+The current checked-in framework is configured for the Simple Paper synthetic
+demonstrator. Its input contract is deliberately narrow:
+
+- 31 synthetic subjects, `001` through `031`, with session `01` and run `01`
+- one 30-second, 1,000-Hz recording per subject
+- one exact channel label, `Cz`
+- one exact `stimulus` event at 15 seconds (EEGLAB latency 15001)
+- one self-contained, one-file `.set` per recording and no `.fdt` files
+- one row per recording in `data_lists/dataset_list.csv`, with project-relative
+  `data/raw/...` paths and no absolute or external input location
+
+Step 1.4 creates the exact internal-reference event `stimulus_prestim` at
+−1,500 ms from `stimulus`. The checked-in processing, QC, screening and Step 5
+numerical settings preserve the verified Oxford route; only the project root,
+event labels and canonical channel configuration differ.
+
+After Step 2.2, inspect the event/channel/epoch inventories and edit the
+generated `data/info/epoch_types/epoch_type_summary.csv` as follows before
+Step 2.3:
+
+| `Type` | `early_NRF` | `noxious_NRF` | `noxious_preterm_NRF` |
+| --- | --- | --- | --- |
+| `stimulus` | `term_foot_early` | `term_foot_nox` | blank |
+| `stimulus_prestim` | `term_foot_early` | `term_foot_nox` | blank |
+
+Configure the public `early_NRF_500Hz.mat` and `noxious_NRF_500Hz.mat`
+templates so each basename resolves to exactly one file on the MATLAB path.
+NRF consumers fail if a logical name is missing or ambiguous; plotting code
+that documents explicit-path support binds the exact canonical file supplied.
+These templates are analysis dependencies only. They are not generator inputs,
+and their fitted outputs are tutorial template-conditioned measurements rather
+than biological or pain validation.
+
+The expected pre-screening route has 62 epoch–channel items and 124 NRF rows.
+Screening remains manual: subject 31's true `stimulus` item contains the
+declared artefact and is the expected sole exclusion, but no script applies
+that decision automatically. If the displayed evidence does not support that
+decision, stop rather than forcing the expected count.
+
+### One-script transaction and stop points
+
+Run one unchanged script at a time from `scripts/`. After each script succeeds,
+errors, or is cancelled, stop and inspect its log and the stated checkpoint
+before selecting the next script:
+
+| Script | Stop and check |
+| --- | --- |
+| Step 1.1 event types | 31 inputs; only the declared raw event labels |
+| Step 1.2 channels | 31 inputs; exact sole channel `Cz` |
+| Step 1.3 processed paths | every derived path remains under `data/processed` |
+| Step 1.4 preprocessing | 31 self-contained processed sets; exact two epoch types and provenance |
+| Step 2.1 QC | all nine configured QC values are present and finite for both items per subject |
+| Step 2.2 epochs | exact `stimulus`/`stimulus_prestim` inventory; no unexpected multi-event epoch |
+| Step 2.3 NRF | approve the mapping table above first; then verify 124 stored fits |
+| Step 3.1 summary paths | every path remains under `data/summary` |
+| Step 3.2 individual summaries | 31 complete four-file summary groups |
+| Step 3.3 pooled summaries | 62 QC rows, 124 NRF rows, 31 manifest rows and 31 epoch structures |
+| Step 3.4 pooled plots | inspect all 31 true `stimulus` items; do not save figures |
+| Step 4.1 package | one immutable 62-item schema-v2 package; do not rerun |
+| Step 4.2 viewer | screen manually; explicitly state when iterative review is complete |
+| Step 4.3 apply decisions | exact decision binding and exclusion propagation; expected 61 retained items |
+| Step 5.1 excluded figures | one complete rollback-safe excluded-image batch |
+| Step 5.2 included epochs | inspect every retained true item and configured overlays |
+| Step 5.3 average time series | inspect simple-mean trace and early/noxious overlays |
+| Step 5.4 average time–frequency | inspect the fixed 3–30-Hz, mean-baseline view |
+| Step 5.5 average PSD | inspect the fixed post-stimulus multitaper view |
+| Step 5.6 QC separation | verify 30 complete `stimulus - stimulus_prestim` pairs and schema-v2 result |
+| Step 5.7 NRF separation | verify the same 30 pairs for noxious `fglsCoef` and schema-v2 result |
+
+The expected counts are verification checkpoints, not instructions to repair,
+exclude, or reinterpret data until a count matches. A mismatch stops the route
+and is investigated as evidence.
 
 ### Logging
 
@@ -452,7 +531,7 @@ This workflow includes several manual decision points.
 
 - prepare `dataset_list.csv`
 - ensure raw data are in the expected `data/raw/` structure
-- edit project paths such as `baseDir`
+- confirm every script resolves this repository root without a fallback
 - confirm EEGLAB, SIMPLE, and required toolboxes are available
 
 ### During Step 1

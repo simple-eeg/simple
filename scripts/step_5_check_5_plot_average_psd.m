@@ -79,8 +79,8 @@ assert(isfile(screened_mat_file), 'Missing screened epochs MAT: %s', screened_ma
 % Exemplar defaults below must be reviewed and adapted for each project.
 % 2A. Filters: which channel / eventtype?
 
-channelFilter   = "CZ";       % channel label (matched case-insensitively, after trimming whitespace)
-eventtypeFilter = "lance";    % case-sensitive eventtype
+channelFilter   = "Cz";       % canonical label; matching remains case-insensitive after trimming whitespace
+eventtypeFilter = "stimulus"; % case-sensitive eventtype
 
 % 2B. Exclusion toggle (the only exclusion mechanism)
 useExclusionFlags = true;     % if true: drop items flagged Exclude; if false: ignore Exclude entirely

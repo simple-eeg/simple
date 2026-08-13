@@ -82,7 +82,7 @@ end
 %   filterMode = "eventtype"
 %   filterMode = "eventannotation"
 filterMode  = "eventtype";
-filterValue = "lance";   % exact match (case-sensitive)
+filterValue = "stimulus";   % exact match (case-sensitive)
 
 % Channel to plot (case-insensitive match)
 channelRequested = "Cz";

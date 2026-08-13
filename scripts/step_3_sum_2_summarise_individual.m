@@ -26,26 +26,25 @@
 %   • If no selected epochs or no present channels → write empty CSVs (headers only); do not write MAT.
 %   • Idempotent: re-running overwrites per-dataset outputs.
 
-log_command_window('start');
 clear; clc;
 
 %% 0) User-configurable parameters
 
-baseDir  = '/Users/lukebaxter/pipeline_paper/simple-framework';
+baseDir  = resolve_framework_project('step_3_sum_2_summarise_individual.m');
+log_command_window('start');
 fileList = fullfile(baseDir, 'data_lists', 'dataset_list.csv');
 
 % Explicit, case-sensitive lists the user controls:
 
 % one or more channels; only those present per dataset are used
 selected_channels = {...
-    'Cz', ...
-    'CZ' ...
+    'Cz' ...
     };
 
 % only these epochs will be exported
 selected_epoch_types = { ...
-    'lance', ...
-    'lance_prestim' ...
+    'stimulus', ...
+    'stimulus_prestim' ...
     };
 
 % per-channel, per-epoch QC metrics to extract
@@ -533,4 +532,40 @@ end
 
 function out = ternary(cond, a, b)
 if cond, out = a; else, out = b; end
+end
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
+end
 end

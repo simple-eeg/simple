@@ -31,11 +31,11 @@
 %     upper bound (confirm once on your EEGLAB version).
 %   • This script defines user-editable options in a single configuration block below.
 
-log_command_window('start');
 clear; clc;
 
 %% Project paths and environment setup
-baseDir = '/Users/lukebaxter/pipeline_paper/simple-framework';
+baseDir = resolve_framework_project('step_1_proc_4_preprocessing.m');
+log_command_window('start');
 functionsDir = fullfile(baseDir, 'functions');
 if exist(functionsDir, 'dir')
     addpath(functionsDir);
@@ -67,16 +67,16 @@ PreprocOptions.delete_labels  = {'NA'};                  % additional labels can
 
 % Block C — Add dummy/offset events
 PreprocOptions.offsetevents = true;
-PreprocOptions.src_types    = {'lance'};
+PreprocOptions.src_types    = {'stimulus'};
 PreprocOptions.offset_ms    = -1500;                     % negative for prestim
-PreprocOptions.new_types    = {'lance_prestim'};
+PreprocOptions.new_types    = {'stimulus_prestim'};
 PreprocOptions.annotation_for_dummies = {'manually_added_dummy'}; % stored as 1x1 cell to match dataset convention
 PreprocOptions.offset_policy = 'skip_oob';               % 'skip_oob' or 'allow_oob'
 
 % Block D — Epoching and baseline
 PreprocOptions.epoching        = true;
-PreprocOptions.epochevents_true  = {'lance'};
-PreprocOptions.epochevents_dummy = {'lance_prestim'};
+PreprocOptions.epochevents_true  = {'stimulus'};
+PreprocOptions.epochevents_dummy = {'stimulus_prestim'};
 PreprocOptions.epochlimpre_ms  = 200;                    % milliseconds before event
 PreprocOptions.epochlimpost_ms = 1000;                   % milliseconds after event
 PreprocOptions.baseadjust      = true;                   % baseline after epoching
@@ -446,3 +446,39 @@ fprintf('  Skipped (missing raw): %d\n', skippedMissingSrc);
 fprintf('  Failed (errors):       %d\n', failed);
 
 log_command_window('stop');
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
+end
+end

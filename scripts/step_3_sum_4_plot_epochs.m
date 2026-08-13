@@ -36,11 +36,11 @@
 %   - If duplicate NRF rows exist for a given item+NRFName, the script errors and stops.
 %   - No legends.
 
-log_command_window('start');
 clear; clc;
 
 %% 1) Paths and environment
-baseDir  = '/Users/lukebaxter/pipeline_paper/simple-framework';
+baseDir  = resolve_framework_project('step_3_sum_4_plot_epochs.m');
+log_command_window('start');
 pooledDir = fullfile(baseDir, 'data', 'summary', 'pooled');
 
 epochsMatPath = fullfile(pooledDir, 'pooled_eeg_epochs.mat');
@@ -56,13 +56,21 @@ assert(isfile(epochsMatPath), 'Missing file: %s', epochsMatPath);
 % Launch EEGLAB interactively to ensure SIMPLE plugin paths (incl. NRFs) are on the MATLAB path.
 % Do NOT use eeglab nogui here.
 eeglab;
+addpath(functionsFolder, '-begin');
+clear NRFUtils
+resolvedNRFUtils = which('NRFUtils');
+expectedNRFUtils = fullfile(functionsFolder, 'NRFUtils.m');
+assert(~isempty(resolvedNRFUtils) && ...
+    strcmp(char(java.io.File(resolvedNRFUtils).getCanonicalPath()), ...
+           char(java.io.File(expectedNRFUtils).getCanonicalPath())), ...
+    'Repository-local NRFUtils.m could not be resolved deterministically.');
 
 %% 2) User-configurable parameters (selection only; plot styling comes later)
 % Filter mode (choose exactly one)
 %   filterMode = "eventtype"
 %   filterMode = "eventannotation"
 filterMode  = "eventtype";
-filterValue = "lance";   % exact match (case-sensitive)
+filterValue = "stimulus";   % exact match (case-sensitive)
 
 % Channel to plot (case-insensitive match)
 channelRequested = "Cz";
@@ -81,6 +89,18 @@ end
 if overlayNRF
     assert(~isempty(nrfNamesRequested), 'overlayNRF is true, but nrfNamesRequested is empty.');
 end
+
+% Resolve every active template request before loading pooled data. Logical
+% basenames must resolve exactly once; explicit paths are also accepted.
+nrfTemplateFiles = cell(numel(nrfNamesRequested), 1);
+logicalNRFNames = cell(numel(nrfNamesRequested), 1);
+for j = 1:numel(nrfNamesRequested)
+    [logicalNRFNames{j}, nrfTemplateFiles{j}] = ...
+        NRFUtils.resolveTemplateFile(nrfNamesRequested{j});
+end
+assert(numel(unique(logicalNRFNames)) == numel(logicalNRFNames), ...
+    'Active NRF requests must yield unique logical template names.');
+nrfNamesRequested = logicalNRFNames;
 
 assert(filterMode == "eventtype" || filterMode == "eventannotation", ...
     'filterMode must be "eventtype" or "eventannotation".');
@@ -146,8 +166,7 @@ if overlayNRF
         nm = string(nrfNamesRequested{j});
         nrfTemplates(j).name = nm;
 
-        nrfFile = which(char(nm + ".mat"));
-        assert(~isempty(nrfFile), 'NRF template not found on path: %s.mat', nm);
+        nrfFile = nrfTemplateFiles{j};
 
         T = load(nrfFile);
         assert(isfield(T, 'NRF') && isfield(T, 'fs'), 'NRF file must contain variables NRF and fs: %s', nrfFile);
@@ -545,3 +564,39 @@ for f = 1:n_figs
 end
 
 log_command_window('stop');
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
+end
+end

@@ -116,9 +116,9 @@ outMAT = fullfile(inDir, 'step_5_check_7_sep_check_nrf_result.mat');
 channel_of_interest = "Cz";
 
 % Internal-reference event: exact match after strtrim
-eventtype_reference = "lance_prestim";
+eventtype_reference = "stimulus_prestim";
 % True event: exact match after strtrim
-eventtype_primary   = "lance";
+eventtype_primary   = "stimulus";
 
 % NRFName to analyse (exact match after strtrim; case-sensitive)
 NRFName_of_interest = "noxious_NRF_500Hz";

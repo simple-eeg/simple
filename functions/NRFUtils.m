@@ -6,6 +6,7 @@ classdef NRFUtils
     %   profiles = NRFUtils.parseIni(config_path)
     %   profiles = NRFUtils.validateProfiles(profiles)
     %   map      = NRFUtils.readEpochTypeMapping(epoch_csv, profiles, families)
+    %   [logicalName, templateFile] = NRFUtils.resolveTemplateFile(templateRequest)
     %   [fit_cache, templ_info] = NRFUtils.fitAndCache(EEG, profiles, used_profile_names, labels, zero_t_ms)
     %
     % Notes:
@@ -140,6 +141,84 @@ classdef NRFUtils
             end
         end
 
+        function [logicalName, templateFile] = resolveTemplateFile(templateRequest)
+            % Resolve one NRF request deterministically.
+            %
+            % A request may be a logical basename (with optional .mat) or an
+            % explicit path. Logical requests must resolve to exactly one file
+            % on the MATLAB path. The returned logical name is always a valid
+            % MATLAB identifier and templateFile is canonical.
+            if isstring(templateRequest)
+                if ~isscalar(templateRequest) || ismissing(templateRequest)
+                    error('SIMPLE:InvalidNRFTemplateRequest', ...
+                        'An NRF template request must be one nonmissing text scalar.');
+                end
+                templateRequest = char(templateRequest);
+            end
+            if ~ischar(templateRequest) || size(templateRequest, 1) ~= 1
+                error('SIMPLE:InvalidNRFTemplateRequest', ...
+                    'An NRF template request must be one character vector or string scalar.');
+            end
+
+            templateRequest = strtrim(templateRequest);
+            if isempty(templateRequest)
+                error('SIMPLE:InvalidNRFTemplateRequest', ...
+                    'An NRF template request must not be blank.');
+            end
+
+            isExplicitPath = contains(templateRequest, '/') || contains(templateRequest, '\');
+            normalisedRequest = strrep(templateRequest, '\', filesep);
+            normalisedRequest = strrep(normalisedRequest, '/', filesep);
+            [~, requestBase, requestExt] = fileparts(normalisedRequest);
+            if isExplicitPath
+                candidate = templateRequest;
+                if ~endsWith(candidate, '.mat', 'IgnoreCase', true)
+                    candidate = [candidate '.mat'];
+                end
+                if isfile(candidate)
+                    templateFile = char(java.io.File(candidate).getCanonicalPath());
+                else
+                    templateFile = '';
+                end
+                logicalName = requestBase;
+            else
+                if strcmpi(requestExt, '.mat')
+                    logicalName = requestBase;
+                else
+                    logicalName = templateRequest;
+                end
+                templateMatches = which([logicalName '.mat'], '-all');
+                if isempty(templateMatches)
+                    templateMatches = {};
+                elseif ischar(templateMatches)
+                    templateMatches = {templateMatches};
+                end
+                canonicalMatches = cell(size(templateMatches));
+                for matchIndex = 1:numel(templateMatches)
+                    canonicalMatches{matchIndex} = ...
+                        char(java.io.File(templateMatches{matchIndex}).getCanonicalPath());
+                end
+                canonicalMatches = unique(canonicalMatches, 'stable');
+                if isscalar(canonicalMatches)
+                    templateFile = canonicalMatches{1};
+                else
+                    templateFile = '';
+                end
+            end
+
+            if isempty(logicalName) || ~isvarname(logicalName)
+                error('SIMPLE:InvalidNRFTemplateLogicalName', ...
+                    ['NRF request "%s" does not yield a valid logical template name. ' ...
+                     'Use a .mat basename that is a valid MATLAB identifier.'], templateRequest);
+            end
+            if isempty(templateFile)
+                error('SIMPLE:NRFTemplateResolutionFailed', ...
+                    ['NRF template "%s" did not resolve to exactly one file. Put one ' ...
+                     'unambiguous .mat file on the configured MATLAB path or provide ' ...
+                     'an explicit file path.'], templateRequest);
+            end
+        end
+
         function map = readEpochTypeMapping(epoch_csv, profiles, families)
             % Read CSV with columns: Type, early_NRF, noxious_NRF, noxious_preterm_NRF
             % Build three containers.Map: for each family, Type (case-sensitive) -> profileName
@@ -208,14 +287,20 @@ classdef NRFUtils
                 pname = used_profile_names{up};
                 p = profiles.(pname);
 
-                % Template info (load once)
+                % Template info (load once from the one deterministic path)
                 if ~isfield(templ_info, p.NRFName)
-                    S = load([p.NRFName, '.mat']); % must contain NRF and fs; on MATLAB path
+                    [logicalName, templateFile] = NRFUtils.resolveTemplateFile(p.NRFName);
+                    if ~strcmp(logicalName, p.NRFName)
+                        error('SIMPLE:NRFTemplateLogicalNameMismatch', ...
+                            'Profile NRFName "%s" must be a logical basename without a path or extension.', p.NRFName);
+                    end
+                    S = load(templateFile);
                     if ~isfield(S, 'NRF') || ~isfield(S, 'fs')
-                        error('NRF file %s.mat must contain variables NRF and fs.', p.NRFName);
+                        error('NRF file %s must contain variables NRF and fs.', templateFile);
                     end
                     templ_info.(p.NRFName).fs = S.fs;
                     templ_info.(p.NRFName).duration_ms = numel(S.NRF)/S.fs*1000;
+                    templ_info.(p.NRFName).file = templateFile;
                 end
                 if templ_info.(p.NRFName).fs ~= EEG.srate
                     error('Sampling-rate mismatch for %s: NRF fs=%g, EEG.srate=%g', ...

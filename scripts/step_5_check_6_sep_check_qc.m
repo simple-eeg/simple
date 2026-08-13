@@ -105,9 +105,9 @@ outMAT = fullfile(inDir, 'step_5_check_6_sep_check_qc_result.mat');
 channel_of_interest = "Cz";
 
 % Internal-reference event: exact match after strtrim
-eventtype_reference = "lance_prestim";
+eventtype_reference = "stimulus_prestim";
 % True event: exact match after strtrim
-eventtype_primary   = "lance";
+eventtype_primary   = "stimulus";
 
 % qc_metric must match a column name exactly (case-sensitive) after strtrim
 qc_metric = "MeanAbsDiffNorm";

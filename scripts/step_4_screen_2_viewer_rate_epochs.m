@@ -18,11 +18,11 @@
 %       • Current marker/line: red
 %       • If browsing Excluded view and the item was excluded-at-launch: grey marker/line
 
-log_command_window('start');
 clear; clc;
 
-%% User-editable paths
-baseDir      = '/Users/lukebaxter/pipeline_paper/simple-framework';
+%% Repository-derived paths
+baseDir      = resolve_framework_project('step_4_screen_2_viewer_rate_epochs.m');
+log_command_window('start');
 screeningDir = fullfile(baseDir, 'data', 'summary', 'screening');
 
 packagePath  = fullfile(screeningDir, 'screening_package.mat');
@@ -1168,5 +1168,41 @@ end
 h = lower(strtrim(value));
 if isempty(regexp(h, '^[0-9a-f]{64}$', 'once'))
     error('%s must contain exactly 64 hexadecimal SHA-256 characters.', label);
+end
+end
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
 end
 end

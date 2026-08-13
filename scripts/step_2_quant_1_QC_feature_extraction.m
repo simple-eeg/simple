@@ -12,11 +12,11 @@
 %   - If no epochs: WARN and continue (do not resave)
 %   - If none of the requested channels are present: WARN and continue (do not resave)
 
-log_command_window('start');
 clear; clc;
 
 %% Project setup
-baseDir         = '/Users/lukebaxter/pipeline_paper/simple-framework';
+baseDir         = resolve_framework_project('step_2_quant_1_QC_feature_extraction.m');
+log_command_window('start');
 functionsFolder = fullfile(baseDir, 'functions');
 if exist(functionsFolder, 'dir'); addpath(functionsFolder); end
 
@@ -29,7 +29,7 @@ assert(exist('quality_control_features_with_diagnostics','file') == 2, ...
     'quality_control_features_with_diagnostics.m not found on path.');
 
 %% ---- User-editable QC options (REQUESTED) ----
-channels_of_interest = {'Cz','CZ'};   % exact, case-sensitive labels
+channels_of_interest = {'Cz'};   % exact, case-sensitive canonical demonstrator label
 qc_features = { ...
     'maxAbsEpoch', ...
     'sdEpoch', ...
@@ -182,3 +182,39 @@ fprintf('QC complete. Files updated: %d / %d | Skipped missing: %d | Skipped no-
     processedCount, totalToDo, skipped_missingFile, skipped_noEpochs, skipped_noChannels);
 
 log_command_window('stop');
+
+function baseDir = resolve_framework_project(expectedScriptName)
+% Resolve this saved script's repository root without a personal fallback.
+scriptFile = mfilename('fullpath');
+localSeparator = strfind(scriptFile, '>');
+if ~isempty(localSeparator)
+    scriptFile = scriptFile(1:localSeparator(1)-1);
+end
+if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
+    scriptFile = [scriptFile '.m'];
+end
+scriptsDir = fileparts(scriptFile);
+[baseDir, scriptsLeaf] = fileparts(scriptsDir);
+expectedScriptPath = fullfile(scriptsDir, expectedScriptName);
+functionsDir = fullfile(baseDir, 'functions');
+loggerPath = fullfile(scriptsDir, 'log_command_window.m');
+if isempty(scriptFile) || ~strcmp(scriptsLeaf, 'scripts') || ...
+        ~isfile(expectedScriptPath) || ...
+        ~strcmp(char(java.io.File(scriptFile).getCanonicalPath()), ...
+                char(java.io.File(expectedScriptPath).getCanonicalPath())) || ...
+        ~isfolder(functionsDir) || ~isfolder(fullfile(baseDir, 'data_lists')) || ...
+        ~isfile(loggerPath) || ~isfile(fullfile(baseDir, 'README.md'))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'Run this saved framework script from its repository scripts directory.');
+end
+addpath(scriptsDir, '-begin');
+addpath(functionsDir, '-begin');
+clear log_command_window
+resolvedLogger = which('log_command_window');
+if isempty(resolvedLogger) || ...
+        ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+                char(java.io.File(loggerPath).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local log_command_window.m could not be resolved deterministically.');
+end
+end

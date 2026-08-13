@@ -1,9 +1,11 @@
 function log_command_window(action)
 % LOG_COMMAND_WINDOW  Start/stop mirroring MATLAB Command Window to a per-script log.
 %
-% Place calls at the top and bottom of each analysis script:
-%   log_command_window('start');
+% After resolving and canonically binding this repository-local helper,
+% place calls around the analysis body:
 %   clear; clc;
+%   % ... resolve project root; add scripts/ at path begin; verify this helper ...
+%   log_command_window('start');
 %   % ... your code ...
 %   log_command_window('stop');
 %
