@@ -69,6 +69,18 @@ selected_nrf_names = { ...
 %% 1) Initialize EEGLAB — read-only use
 eeglab;
 assert(exist('pop_loadset','file') == 2, 'EEGLAB ''pop_loadset'' not found on the MATLAB path.');
+functionsDir = fullfile(baseDir, 'functions');
+scriptsDir = fullfile(baseDir, 'scripts');
+addpath(functionsDir, '-begin');
+addpath(scriptsDir, '-begin');
+clear log_command_window
+rehash path
+expectedLogger = fullfile(scriptsDir, 'log_command_window.m');
+resolvedLogger = which('log_command_window');
+assert(~isempty(resolvedLogger) && ...
+    strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+           char(java.io.File(expectedLogger).getCanonicalPath())), ...
+    'Repository-local logger did not remain authoritative after EEGLAB startup.');
 
 %% 2) Read spreadsheet and validate required input columns
 

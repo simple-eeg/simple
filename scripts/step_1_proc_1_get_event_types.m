@@ -45,6 +45,18 @@ assert(exist('eeglab','file') == 2 || exist('pop_loadset','file') == 2, ...
 if exist('eeglab','file') == 2
     eeglab;
 end
+functionsDir = fullfile(char(root), 'functions');
+scriptsDir = fullfile(char(root), 'scripts');
+addpath(functionsDir, '-begin');
+addpath(scriptsDir, '-begin');
+clear log_command_window
+rehash path
+expectedLogger = fullfile(scriptsDir, 'log_command_window.m');
+resolvedLogger = which('log_command_window');
+assert(~isempty(resolvedLogger) && ...
+    strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+           char(java.io.File(expectedLogger).getCanonicalPath())), ...
+    'Repository-local logger did not remain authoritative after EEGLAB startup.');
 
 %% 1) Load dataset_list.csv & validate columns
 fprintf("Loading dataset list: %s\n", fileListPath);

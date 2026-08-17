@@ -1,4 +1,4 @@
-# simple-framework
+# SIMPLE Framework
 
 A MATLAB workflow for auditable, offline, group-level analysis of event-related EEG in an extreme low-redundancy regime.
 
@@ -15,6 +15,21 @@ The repository is written in MATLAB and is organised as a five-step workflow:
 3. **sum** – export and pool summaries
 4. **screen** – perform explicit, auditable epoch–channel screening
 5. **check** – run post-screening plausibility checks
+
+These five stages correspond directly to Steps 3–7 in `simple-oxford` and
+`simple-strasbourg`:
+
+| `simple-framework` | `simple-oxford` / `simple-strasbourg` |
+| --- | --- |
+| Step 1: `proc` | Step 3 |
+| Step 2: `quant` | Step 4 |
+| Step 3: `sum` | Step 5 |
+| Step 4: `screen` | Step 6 |
+| Step 5: `check` | Step 7 |
+
+The dataset-specific repositories document their own import and group-analysis
+stages. This README provides the detailed reference for the shared five-stage
+framework.
 
 ## What this repository is for
 
@@ -53,20 +68,50 @@ Several steps require you to inspect generated outputs, edit configuration files
 
 ## Repository structure
 
-Data, logs, generated outputs, screening decisions, and downstream analysis files are local working materials excluded from version control; a fresh clone contains the workflow code, tracked configuration, and documentation only.
+Data, logs, generated outputs, screening decisions, and downstream analysis
+files are local working materials excluded from version control. A fresh clone
+contains an empty `data/` and `data_lists/` through tracked `.gitkeep` files,
+plus the workflow code, bundled templates, configuration, tests and
+documentation.
+
+`data/` and `data_lists/` are deliberately present through tracked `.gitkeep`
+files; generated descendants remain local.
 
 ### `data_lists/`
 
 Core metadata and configuration files used by the workflow.
 
-Key files include:
-
-- `dataset_list.csv`
-- `nrf_config.ini`
+`dataset_list.csv` and any other CSV/XLSX project lists are local and ignored.
+The tracked NRF configuration is under `NRFs/`, not this directory.
 
 ### `functions/`
 
 MATLAB helper functions and utility code used by the runnable scripts.
+
+The repository is self-contained: this directory includes `preproc`,
+`quality_control_features` and its 11 `calc_*` functions,
+`estimate_response`, `jittercorrect`, `NRFUtils`, event helpers, averaging and
+post-screening helpers.
+
+### `NRFs/`
+
+Six bundled NRF templates at 500 Hz and 2,000 Hz, together with the tracked
+`nrf_config.ini`. Logical template names resolve only against this directory;
+explicit canonical MAT-file paths are also supported where documented. The
+MATLAB path is not used to discover templates.
+
+- `early_NRF_500Hz.mat`
+- `early_NRF_2000Hz.mat`
+- `noxious_NRF_500Hz.mat`
+- `noxious_NRF_2000Hz.mat`
+- `noxious_preterm_NRF_500Hz.mat`
+- `noxious_preterm_NRF_2000Hz.mat`
+
+The principal APIs are `preproc(EEG, options)`,
+`estimate_response(EEG, options)`, `jittercorrect`,
+`quality_control_features` and `add_offset_events`. The shipped profiles define
+the demonstrator's exact `Cz` channel and term-foot NRF post start of 400 ms;
+profile values are project configuration rather than universal SIMPLE defaults.
 
 ### `scripts/`
 
@@ -89,9 +134,15 @@ These outputs are intended for inspection and quality checks during the workflow
 
 Per-dataset and pooled summary outputs, then screening outputs and post-screening outputs.
 
-### `logs/`
+### `tests/`
 
-Per-script Command Window logs written by `log_command_window.m`.
+Synthetic regression fixtures, the complete MATLAB test runner and a finite
+static/Git verifier. These tests use synthetic fixtures and do not require or
+inspect real EEG data.
+
+### `data/logs/`
+
+Ignored per-script Command Window logs written by `log_command_window.m`.
 
 ## Before you begin
 
@@ -101,8 +152,13 @@ This repository assumes access to:
 
 - **MATLAB**
 - **EEGLAB**
-- the **SIMPLE** EEGLAB plugin
 - the MATLAB toolboxes required by the specific functions you use
+
+The currently verified producing environment is MATLAB R2026a Update 4 with
+EEGLAB 2026.0.0. The complete regression suite additionally exercises required
+dependencies including `corr`, `robustfit`, `fgls` and EEGLAB functions.
+CleanLine is optional; the notch-filter route is available when it is not
+selected.
 
 ### Expected input data
 
@@ -135,8 +191,8 @@ This matters because the helper `log_command_window.m` lives in `scripts/` and i
 
 ## Fixed synthetic-demonstrator route
 
-The current checked-in framework is configured for the Simple Paper synthetic
-demonstrator. Its input contract is deliberately narrow:
+This repository is configured for the Simple Paper synthetic demonstrator. Its
+input contract is deliberately narrow:
 
 - 31 synthetic subjects, `001` through `031`, with session `01` and run `01`
 - one 30-second, 1,000-Hz recording per subject
@@ -147,9 +203,8 @@ demonstrator. Its input contract is deliberately narrow:
   `data/raw/...` paths and no absolute or external input location
 
 Step 1.4 creates the exact internal-reference event `stimulus_prestim` at
-−1,500 ms from `stimulus`. The checked-in processing, QC, screening and Step 5
-numerical settings preserve the verified Oxford route; only the project root,
-event labels and canonical channel configuration differ.
+−1,500 ms from `stimulus`. The processing, QC, screening and Step 5 numerical
+settings define the demonstrator profile used by the scripts.
 
 After Step 2.2, inspect the event/channel/epoch inventories and edit the
 generated `data/info/epoch_types/epoch_type_summary.csv` as follows before
@@ -160,9 +215,9 @@ Step 2.3:
 | `stimulus` | `term_foot_early` | `term_foot_nox` | blank |
 | `stimulus_prestim` | `term_foot_early` | `term_foot_nox` | blank |
 
-Configure the public `early_NRF_500Hz.mat` and `noxious_NRF_500Hz.mat`
-templates so each basename resolves to exactly one file on the MATLAB path.
-NRF consumers fail if a logical name is missing or ambiguous; plotting code
+The public `early_NRF_500Hz.mat` and `noxious_NRF_500Hz.mat` templates are
+bundled under `NRFs/`. NRF consumers bind logical names to that repository-local
+directory and fail closed if a template is missing or malformed; plotting code
 that documents explicit-path support binds the exact canonical file supplied.
 These templates are analysis dependencies only. They are not generator inputs,
 and their fitted outputs are tutorial template-conditioned measurements rather
@@ -212,7 +267,7 @@ and is investigated as evidence.
 
 Each runnable script starts and stops Command Window logging via `log_command_window('start')` and `log_command_window('stop')`.
 
-This creates a per-script log file in `logs/`, which is useful for:
+This creates a per-script log file in `data/logs/`, which is useful for:
 
 - reviewing warnings and errors later
 - checking what happened during a run
@@ -235,7 +290,7 @@ It records dataset identifiers and file paths, and later gains additional derive
 
 The workflow assumes that this file correctly points to the raw and processed datasets used in each stage.
 
-### `data_lists/nrf_config.ini`
+### `NRFs/nrf_config.ini`
 
 This file defines named NRF extraction profiles.
 
@@ -245,7 +300,8 @@ Each profile specifies:
 - baseline length
 - jitter
 - channel labels
-- fitting window start
+- one fitting-window start in `projectionTimes_pre` or
+  `projectionTimes_post`, with the other left empty
 
 The defaults in this file are the recommended settings for the current workflow, although advanced users may modify them if needed.
 
@@ -517,7 +573,10 @@ Steps 5.2–5.5 are display-only apart from their logs. Steps 5.6 and 5.7 atomic
 
 The paired checks preserve the framework's event–channel/recording-level unit, form each complete `true - internal reference` difference first, and support only the paired median or paired mean with a paired BCa bootstrap interval. Participant reduction is not introduced in Step 5. The current event, NRF, ROI, and overlay choices are labelled exemplar defaults, not universal framework requirements.
 
-Steps 5.2 and 5.3 do not launch EEGLAB, SIMPLE, or a template-path initialiser. Configure the required NRF templates so each active basename resolves to exactly one `.mat` file before running; Step 5.3 also accepts an explicit template path and fails closed if resolution is missing or ambiguous.
+Steps 5.2 and 5.3 do not launch EEGLAB or a template-path initialiser. Their
+active logical names resolve directly against this repository's `NRFs/`
+directory; Step 5.3 also accepts an explicit template path and fails closed on
+missing, malformed or conflicting template identity.
 
 ### Relation to the framework
 
@@ -532,7 +591,7 @@ This workflow includes several manual decision points.
 - prepare `dataset_list.csv`
 - ensure raw data are in the expected `data/raw/` structure
 - confirm every script resolves this repository root without a fallback
-- confirm EEGLAB, SIMPLE, and required toolboxes are available
+- confirm EEGLAB and required toolboxes are available
 
 ### During Step 1
 
@@ -571,7 +630,7 @@ Across the full workflow, the most important outputs are:
 - screened pooled outputs with `Exclude` flags
 - excluded-item PNGs
 - post-screening guardrail figures and console summaries
-- per-script log files in `logs/`
+- per-script log files in `data/logs/`
 
 ## Logging and provenance
 
@@ -579,7 +638,8 @@ The workflow includes several provenance and audit features.
 
 ### Command Window logs
 
-All runnable scripts write to per-script log files in `logs/` via `log_command_window.m`.
+All runnable scripts write to ignored per-script log files in `data/logs/` via
+`log_command_window.m`.
 
 ### Provenance in `.set` files
 
@@ -588,6 +648,28 @@ Some processing and quantification steps write structured provenance into `EEG.e
 ### Screening package hash
 
 The screening package includes a SHA-256 hash tying it to the pooled inputs and QC feature list. This helps ensure that screening decisions are only applied to the correct data.
+
+## Regression tests
+
+`tests/run_all_tests.m` exercises preprocessing, response estimation, jitter
+correction, all QC features, event helpers, NRF resolution and overlays,
+configuration/cache behaviour, dependency failure modes and logging against a
+frozen synthetic oracle. Numerical outputs use strict `isequaln` comparison.
+Run it only in the accepted isolated MATLAB/EEGLAB test
+environment.
+
+From MATLAB, call the runner with explicit repository and EEGLAB roots:
+
+```matlab
+addpath(fullfile(frameworkRoot, 'tests'), '-begin');
+results = run_all_tests(frameworkRoot, eeglabRoot);
+assert(results.passed);
+```
+
+`tests/run_static_checks.sh` builds an isolated tracked snapshot and
+checks repository shape, exact template and function inventories, the public
+API surface, ignore policy, self-contained paths, caller contracts and coverage
+manifest consistency without touching project data.
 
 ## Relationship to the methods paper
 

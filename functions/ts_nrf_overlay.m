@@ -40,6 +40,7 @@ function [overlay_ts, fit] = ts_nrf_overlay(y_ts, nrfName, times_ms, fit_time_ms
 %
 %   fit         : struct with provenance and fit metrics, including:
 %       method          : 'ols' or 'fgls_ar1'
+%       nrfName         : validated logical NRF template basename
 %       nrfFile         : full path to the NRF .mat file used
 %       fs              : NRF sampling rate (Hz)
 %       dt_ms           : median time step (ms)
@@ -64,9 +65,9 @@ function [overlay_ts, fit] = ts_nrf_overlay(y_ts, nrfName, times_ms, fit_time_ms
 %       r_max           : maximum Pearson correlation over all candidate lags
 %
 % Notes
-%   - The function resolves only an explicit/full path or a file already on
-%     the configured MATLAB path. It has no personal-path or runtime-
-%     initialiser fallback; unresolved templates fail before computation.
+%   - Logical basenames resolve only against this repository's NRFs folder.
+%     Explicit template paths remain supported. Ambient MATLAB-path lookup is
+%     deliberately not used.
 %   - To switch between OLS and fGLS AR(1), edit the local 'fit_method' variable
 %     below. The external interface is unchanged.
 
@@ -144,42 +145,9 @@ end
 % -------------------------------------------------------------------------
 % 2) Locate and load NRF template
 % -------------------------------------------------------------------------
-nrfFile = "";
-
-% Only path-shaped requests bypass configured-path lookup. A bare logical
-% name, with or without .mat, must resolve to exactly one configured file.
-isPathRequest = contains(nrfName, "/") || contains(nrfName, "\");
-if isPathRequest
-    candidate = char(nrfName);
-    if ~endsWith(candidate, '.mat', 'IgnoreCase', true)
-        candidate = [candidate '.mat'];
-    end
-    if isfile(candidate)
-        nrfFile = string(char(java.io.File(candidate).getCanonicalPath()));
-    end
-else
-    logicalName = nrfName;
-    if endsWith(logicalName, ".mat", 'IgnoreCase', true)
-        logicalName = extractBefore(logicalName, strlength(logicalName)-3);
-    end
-    matches = which(char(logicalName + ".mat"), '-all');
-    if ischar(matches)
-        matches = {matches};
-    end
-    if numel(matches) == 1
-        nrfFile = string(matches{1});
-    elseif numel(matches) > 1
-        error('ts_nrf_overlay:NRFAmbiguous', ...
-            ['NRF "%s" resolves to %d files. Pass one explicit full path or ', ...
-             'remove the path ambiguity before computation.'], nrfName, numel(matches));
-    end
-end
-
-if nrfFile == ""
-    error('ts_nrf_overlay:NRFNotFound', ...
-        ['NRF "%s" not found. Put the NRF .mat on the explicitly configured ', ...
-         'MATLAB path or pass a full path before computation.'], nrfName);
-end
+functionsFolder = fileparts(mfilename('fullpath'));
+repositoryRoot = fileparts(functionsFolder);
+[logicalNRFName, nrfFile] = NRFUtils.resolveTemplateFile(nrfName, repositoryRoot);
 
 S = load(nrfFile);
 if ~isfield(S, 'NRF') || ~isfield(S, 'fs')
@@ -384,7 +352,8 @@ x_shift_ms      = x_shift_samples * dt_med;
 
 fit = struct();
 fit.method          = char(lower(string(fit_method)));
-fit.nrfFile         = char(nrfFile);
+fit.nrfName         = logicalNRFName;
+fit.nrfFile         = nrfFile;
 fit.fs              = fs;
 fit.dt_ms           = dt_med;
 fit.anchor_ms       = fit_time_ms;

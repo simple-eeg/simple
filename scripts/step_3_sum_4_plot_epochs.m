@@ -24,6 +24,7 @@
 %        PLOT.seriesNames: [1 x n_series] (EEG + NRFName list)
 %        PLOT.epochMeta  : table (one row per item)
 %        PLOT.plotTitle  : [n_items x 1] subplot titles
+%        PLOT.templateProvenance: logical NRF names and canonical template files
 %   3) Sort items by: subjectID, sessionID, runID, epoch_index (numeric), channel
 %   4) Clear everything except PLOT.
 %   5) Set plot styling variables (user-editable) then plot (3×3 paging).
@@ -47,17 +48,15 @@ epochsMatPath = fullfile(pooledDir, 'pooled_eeg_epochs.mat');
 nrfCsvPath    = fullfile(pooledDir, 'pooled_eeg_nrf_features.csv');
 
 functionsFolder = fullfile(baseDir, 'functions');
-if exist(functionsFolder, 'dir')
-    addpath(functionsFolder);
-end
 
 assert(isfile(epochsMatPath), 'Missing file: %s', epochsMatPath);
 
-% Launch EEGLAB interactively to ensure SIMPLE plugin paths (incl. NRFs) are on the MATLAB path.
-% Do NOT use eeglab nogui here.
+% Launch EEGLAB interactively, then make this repository's functions
+% authoritative over any same-named function on another path entry.
 eeglab;
 addpath(functionsFolder, '-begin');
 clear NRFUtils
+rehash path
 resolvedNRFUtils = which('NRFUtils');
 expectedNRFUtils = fullfile(functionsFolder, 'NRFUtils.m');
 assert(~isempty(resolvedNRFUtils) && ...
@@ -96,7 +95,7 @@ nrfTemplateFiles = cell(numel(nrfNamesRequested), 1);
 logicalNRFNames = cell(numel(nrfNamesRequested), 1);
 for j = 1:numel(nrfNamesRequested)
     [logicalNRFNames{j}, nrfTemplateFiles{j}] = ...
-        NRFUtils.resolveTemplateFile(nrfNamesRequested{j});
+        NRFUtils.resolveTemplateFile(nrfNamesRequested{j}, baseDir);
 end
 assert(numel(unique(logicalNRFNames)) == numel(logicalNRFNames), ...
     'Active NRF requests must yield unique logical template names.');
@@ -160,22 +159,27 @@ end
 % Each template file must contain NRF (vector) and fs (Hz).
 if overlayNRF
     nReq = numel(nrfNamesRequested);
-    nrfTemplates = struct('name', cell(nReq,1), 'NRF', [], 'fs', NaN, 'L', NaN, 'meanNRF', NaN);
+    nrfTemplates = struct('name', cell(nReq,1), 'file', cell(nReq,1), ...
+        'NRF', [], 'fs', NaN, 'L', NaN, 'meanNRF', NaN);
 
     for j = 1:nReq
         nm = string(nrfNamesRequested{j});
         nrfTemplates(j).name = nm;
 
         nrfFile = nrfTemplateFiles{j};
+        nrfTemplates(j).file = nrfFile;
 
         T = load(nrfFile);
         assert(isfield(T, 'NRF') && isfield(T, 'fs'), 'NRF file must contain variables NRF and fs: %s', nrfFile);
 
+        assert(isnumeric(T.NRF) && isreal(T.NRF) && isvector(T.NRF) && ...
+            numel(T.NRF) >= 2 && all(isfinite(T.NRF(:))), ...
+            'NRF must be a finite real numeric vector in: %s', nrfFile);
+        assert(isnumeric(T.fs) && isreal(T.fs) && isscalar(T.fs) && ...
+            isfinite(T.fs) && T.fs > 0, 'Bad fs in: %s', nrfFile);
+
         nrfVec = T.NRF(:);
         fs = double(T.fs);
-
-        assert(isnumeric(nrfVec) && numel(nrfVec) >= 2, 'Bad NRF vector in: %s', nrfFile);
-        assert(isfinite(fs) && fs > 0, 'Bad fs in: %s', nrfFile);
 
         nrfTemplates(j).NRF = double(nrfVec);
         nrfTemplates(j).fs  = fs;
@@ -252,6 +256,8 @@ PLOT.Y = [];  % allocated when we learn n_points from the first contributing dat
 PLOT.seriesNames = seriesNames;
 PLOT.epochMeta = table();
 PLOT.plotTitle = [];
+PLOT.templateProvenance = table(string(logicalNRFNames), ...
+    string(nrfTemplateFiles), 'VariableNames', {'NRFName', 'canonicalFile'});
 
 itemCounter = 0;
 Y_allocated = false;

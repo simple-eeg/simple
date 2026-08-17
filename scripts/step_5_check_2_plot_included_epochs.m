@@ -66,13 +66,22 @@ if ~strcmp(scriptsLeaf, 'scripts') || ~isfile(expectedScriptPath) || ...
 end
 addpath(scriptsDir, '-begin');
 addpath(functionsDir, '-begin');
-clear log_command_window
+clear log_command_window NRFUtils
+rehash path
 resolvedLogger = which('log_command_window');
 if isempty(resolvedLogger) || ...
         ~strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
                 char(java.io.File(loggerPath).getCanonicalPath()))
     error('SIMPLE:UnableToResolveProjectRoot', ...
         'The repository-local log_command_window.m could not be resolved deterministically.');
+end
+expectedNRFUtils = fullfile(functionsDir, 'NRFUtils.m');
+resolvedNRFUtils = which('NRFUtils');
+if isempty(resolvedNRFUtils) || ...
+        ~strcmp(char(java.io.File(resolvedNRFUtils).getCanonicalPath()), ...
+                char(java.io.File(expectedNRFUtils).getCanonicalPath()))
+    error('SIMPLE:UnableToResolveProjectRoot', ...
+        'The repository-local NRFUtils.m could not be resolved deterministically.');
 end
 
 %% 2) User-configurable parameters (selection only; plot styling comes later)
@@ -108,16 +117,25 @@ assert(islogical(overlayNRF) && isscalar(overlayNRF), ...
     'overlayNRF must be a logical scalar.');
 
 if overlayNRF
-    requestedNames = string(nrfNamesRequested(:));
-    assert(~isempty(requestedNames) && numel(requestedNames) <= 3 && ...
-        all(~ismissing(requestedNames)) && all(strlength(strtrim(requestedNames)) > 0), ...
+    requestedReferences = string(nrfNamesRequested(:));
+    assert(~isempty(requestedReferences) && numel(requestedReferences) <= 3 && ...
+        all(~ismissing(requestedReferences)) && all(strlength(strtrim(requestedReferences)) > 0), ...
         'nrfNamesRequested must contain one to three nonblank names when overlayNRF is true.');
-    requestedNames = strtrim(requestedNames);
+    requestedReferences = strtrim(requestedReferences);
+    requestedNames = strings(size(requestedReferences));
+    nrfTemplatePaths = strings(size(requestedReferences));
+    for templateIndex = 1:numel(requestedReferences)
+        [logicalName, templateFile] = NRFUtils.resolveTemplateFile( ...
+            requestedReferences(templateIndex), baseDir);
+        requestedNames(templateIndex) = string(logicalName);
+        nrfTemplatePaths(templateIndex) = string(templateFile);
+    end
     assert(numel(unique(requestedNames)) == numel(requestedNames), ...
-        'nrfNamesRequested must not contain duplicate names.');
+        'nrfNamesRequested must resolve to unique logical NRF names.');
     nrfNamesRequested = cellstr(requestedNames);
 else
     requestedNames = strings(0, 1);
+    nrfTemplatePaths = strings(0, 1);
     nrfNamesRequested = {};
 end
 
@@ -136,26 +154,6 @@ if ~is_local_child(baseDir, screeningPreflight) || ...
          'this repository for the configured overlay route.']);
 end
 
-% Framework code does not launch EEGLAB or assume a particular template
-% runtime. Every active exemplar template must already resolve exactly once
-% on the configured MATLAB path before logging, loading data or plotting.
-nrfTemplatePaths = strings(numel(nrfNamesRequested), 1);
-for templateIndex = 1:numel(nrfNamesRequested)
-    templateName = string(nrfNamesRequested{templateIndex});
-    templateMatches = string(which(char(templateName + ".mat"), '-all'));
-    templateMatches = unique(templateMatches(strlength(templateMatches) > 0), 'stable');
-    if isempty(templateMatches)
-        error('step_5_check_2:TemplateNotFound', ...
-            ['Configured NRF template did not resolve on the MATLAB path: %s.mat. ' ...
-             'Configure the project template path before running this script.'], templateName);
-    end
-    if numel(templateMatches) ~= 1
-        error('step_5_check_2:TemplateResolutionAmbiguous', ...
-            'Configured NRF template must resolve exactly once, but %s.mat resolved %d times.', ...
-            templateName, numel(templateMatches));
-    end
-    nrfTemplatePaths(templateIndex) = templateMatches(1);
-end
 log_command_window('start');
 pooledDir = fullfile(baseDir, 'data', 'summary', 'screening');
 
@@ -387,13 +385,15 @@ end
 % Each template file must contain NRF (vector) and fs (Hz).
 if overlayNRF
     nReq = numel(nrfNamesRequested);
-    nrfTemplates = struct('name', cell(nReq,1), 'NRF', [], 'fs', NaN, 'L', NaN, 'meanNRF', NaN);
+    nrfTemplates = struct('name', cell(nReq,1), 'file', cell(nReq,1), ...
+        'NRF', [], 'fs', NaN, 'L', NaN, 'meanNRF', NaN);
 
     for j = 1:nReq
         nm = string(nrfNamesRequested{j});
         nrfTemplates(j).name = nm;
 
         nrfFile = char(nrfTemplatePaths(j));
+        nrfTemplates(j).file = nrfFile;
         assert(isfile(nrfFile), 'Resolved NRF template is not a file: %s', nrfFile);
 
         T = load(nrfFile);
@@ -450,6 +450,7 @@ PLOT.selection = struct( ...
     'channelRequested', channelRequested, ...
     'overlayNRF', overlayNRF, ...
     'nrfNamesRequested', requestedNames, ...
+    'nrfTemplateFiles', nrfTemplatePaths, ...
     'missingOverlayPolicy', "error", ...
     'datasetsMissingRequestedChannel', missingRequestedChannel);
 

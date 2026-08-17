@@ -35,6 +35,18 @@ if ~exist(channelsFolder, 'dir'), mkdir(channelsFolder); end
 assert(exist('eeglab','file') == 2, 'EEGLAB not found on path.');
 eeglab;
 assert(exist('pop_loadset','file') == 2, 'pop_loadset not found after launching EEGLAB.');
+functionsDir = fullfile(baseDir, 'functions');
+scriptsDir = fullfile(baseDir, 'scripts');
+addpath(functionsDir, '-begin');
+addpath(scriptsDir, '-begin');
+clear log_command_window
+rehash path
+expectedLogger = fullfile(scriptsDir, 'log_command_window.m');
+resolvedLogger = which('log_command_window');
+assert(~isempty(resolvedLogger) && ...
+    strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
+           char(java.io.File(expectedLogger).getCanonicalPath())), ...
+    'Repository-local logger did not remain authoritative after EEGLAB startup.');
 
 %% Load dataset_list.csv
 fprintf('Loading dataset list...\n');

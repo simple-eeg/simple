@@ -85,17 +85,7 @@ addpath(scriptDir, '-begin');
 clear compute_paired_effect plot_paired_effect_result save_paired_separation_result log_command_window
 requiredHelperNames = ["compute_paired_effect"; ...
     "plot_paired_effect_result"; "save_paired_separation_result"];
-for helperIdx = 1:numel(requiredHelperNames)
-    helperName = requiredHelperNames(helperIdx);
-    expectedHelper = fullfile(functionsDir, helperName + ".m");
-    resolvedHelper = which(char(helperName));
-    if isempty(resolvedHelper) || ...
-            ~strcmp(char(java.io.File(resolvedHelper).getCanonicalPath()), ...
-                    char(java.io.File(expectedHelper).getCanonicalPath()))
-        error('SimpleFramework:Step5HelperResolutionFailed', ...
-            'Repository-local helper "%s" could not be resolved deterministically.', helperName);
-    end
-end
+pairedHelperFiles = assert_local_helper_paths(functionsDir, requiredHelperNames);
 resolvedLogger = which('log_command_window');
 canonicalLogger = char(java.io.File(loggerPath).getCanonicalPath());
 if isempty(resolvedLogger)
@@ -418,10 +408,12 @@ if needsShield
     path_before = path;
     statsDir = fullfile(matlabroot, 'toolbox', 'stats', 'stats');
     addpath(statsDir, '-begin');
+    addpath(functionsDir, '-begin');
     rehash toolboxcache;
 end
 
 try
+    pairedHelperFiles = assert_local_helper_paths(functionsDir, requiredHelperNames);
     [estimate_result, rng_specification, effect_specification] = compute_paired_effect( ...
         true_values, reference_values, Estimator, Alpha, ...
         bootstrap_resamples, rng_seed, rng_algorithm);
@@ -489,9 +481,9 @@ try
     source_files = struct( ...
         'input_csv', inCSV, ...
         'script', script_file, ...
-        'compute_helper', which('compute_paired_effect'), ...
-        'plot_helper', which('plot_paired_effect_result'), ...
-        'save_helper', which('save_paired_separation_result'));
+        'compute_helper', pairedHelperFiles{1}, ...
+        'plot_helper', pairedHelperFiles{2}, ...
+        'save_helper', pairedHelperFiles{3});
     separation_result = save_paired_separation_result(outMAT, separation_result, source_files);
     fprintf('Saved machine-readable separation result: %s\n', outMAT);
 
@@ -521,5 +513,29 @@ if ~isempty(localSeparator)
 end
 if ~endsWith(scriptFile, '.m', 'IgnoreCase', true)
     scriptFile = [scriptFile '.m'];
+end
+end
+
+function helperFiles = assert_local_helper_paths(functionsDir, helperNames)
+canonicalFunctionsDir = char(java.io.File(functionsDir).getCanonicalPath());
+helperFiles = cell(size(helperNames));
+for helperIdx = 1:numel(helperNames)
+    helperName = char(helperNames(helperIdx));
+    expectedFile = fullfile(canonicalFunctionsDir, [helperName, '.m']);
+    if ~isfile(expectedFile)
+        error('SimpleFramework:Step5HelperMissing', ...
+            'Required local helper is missing: %s', expectedFile);
+    end
+    resolvedFile = which(helperName);
+    if isempty(resolvedFile)
+        error('SimpleFramework:Step5HelperUnresolved', ...
+            'Required local helper did not resolve: %s', helperName);
+    end
+    resolvedFile = char(java.io.File(resolvedFile).getCanonicalPath());
+    if ~strcmp(resolvedFile, expectedFile)
+        error('SimpleFramework:Step5HelperResolutionFailed', ...
+            'Repository-local helper "%s" could not be resolved deterministically.', helperName);
+    end
+    helperFiles{helperIdx} = resolvedFile;
 end
 end

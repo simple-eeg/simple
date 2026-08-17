@@ -64,8 +64,8 @@ if ~isfolder(functionsDir)
     error('SimpleFramework:Step5FunctionsMissing', ...
         'Required repository-local functions directory is missing: %s', functionsDir);
 end
-requiredHelpers = ["ts_average_simple.m"; "ts_average_NRFshifted.m"; ...
-    "ts_average_woody.m"; "ts_nrf_overlay.m"];
+requiredHelpers = ["NRFUtils.m"; "ts_average_simple.m"; ...
+    "ts_average_NRFshifted.m"; "ts_average_woody.m"; "ts_nrf_overlay.m"];
 missingHelpers = requiredHelpers(~arrayfun(@(x) isfile(fullfile(functionsDir,x)), requiredHelpers));
 if ~isempty(missingHelpers)
     error('SimpleFramework:Step5HelpersMissing', ...
@@ -77,7 +77,8 @@ if ~isfile(loggerPath)
 end
 addpath(scriptDir, '-begin');
 addpath(functionsDir, '-begin');
-clear ts_average_simple ts_average_NRFshifted ts_average_woody ts_nrf_overlay log_command_window
+clear NRFUtils ts_average_simple ts_average_NRFshifted ts_average_woody ts_nrf_overlay log_command_window
+rehash path
 for helperFile = requiredHelpers(:)'
     helperName = erase(helperFile, ".m");
     expectedHelper = fullfile(functionsDir, helperFile);
@@ -185,8 +186,8 @@ overlayColours.noxious_preterm_NRF_500Hz = [0 0.5 0];           % dark green
 averagingApproach          = lower(string(averagingApproach));
 aggregator                 = lower(string(aggregator));
 shiftNRFName               = string(shiftNRFName);
-overlayNRFNames_to_compute = string(overlayNRFNames_to_compute(:));
-overlayNRFNames_to_plot    = string(overlayNRFNames_to_plot(:));
+overlayNRFReferences_to_compute = string(overlayNRFNames_to_compute(:));
+overlayNRFReferences_to_plot    = string(overlayNRFNames_to_plot(:));
 
 if ~(isscalar(channelFilter) && strlength(strtrim(string(channelFilter))) > 0)
     error('Config error: channelFilter must be one non-empty label.');
@@ -229,116 +230,72 @@ if averagingApproach == "nrfshifted" && ...
 end
 shiftNRFName = strtrim(shiftNRFName);
 
-% Resolve each active request and keep its logical name separate from its
-% canonical file path. Logical names bind fit/jitter/colour/output fields;
-% resolved paths bind the exact template bytes passed to the helper.
-overlayNRFFiles_to_compute = strings(0,1);
 if getNRFOverlays
-    if any(ismissing(overlayNRFNames_to_compute)) || ...
-            any(strlength(strtrim(overlayNRFNames_to_compute)) == 0)
+    overlayNRFReferences_to_compute = unique( ...
+        overlayNRFReferences_to_compute, 'stable');
+    if any(ismissing(overlayNRFReferences_to_compute)) || ...
+            any(strlength(strtrim(overlayNRFReferences_to_compute)) == 0)
         error('SimpleFramework:Step5InvalidNRFTemplateRequest', ...
             'Every active NRF template request must be non-empty.');
     end
-
-    logicalComputeNames = strings(numel(overlayNRFNames_to_compute),1);
-    resolvedComputeFiles = strings(numel(overlayNRFNames_to_compute),1);
-    for iTemplate = 1:numel(overlayNRFNames_to_compute)
-        templateRequest = strtrim(overlayNRFNames_to_compute(iTemplate));
-        isExplicitPath = contains(templateRequest, filesep);
-        [~, requestBase, requestExt] = fileparts(char(templateRequest));
-
-        if isExplicitPath
-            candidate = char(templateRequest);
-            if ~endsWith(candidate, '.mat', 'IgnoreCase', true)
-                candidate = [candidate '.mat'];
-            end
-            if isfile(candidate)
-                resolvedTemplate = char(java.io.File(candidate).getCanonicalPath());
-            else
-                resolvedTemplate = '';
-            end
-            logicalName = string(requestBase);
-        else
-            if strcmpi(requestExt, '.mat')
-                logicalName = string(requestBase);
-            else
-                logicalName = templateRequest;
-            end
-            resolvedTemplates = which(char(logicalName + ".mat"), '-all');
-            if isempty(resolvedTemplates)
-                resolvedTemplates = {};
-            elseif ischar(resolvedTemplates)
-                resolvedTemplates = {resolvedTemplates};
-            end
-            if numel(resolvedTemplates) == 1
-                resolvedTemplate = char(java.io.File(resolvedTemplates{1}).getCanonicalPath());
-            else
-                resolvedTemplate = '';
-            end
-        end
-
-        if strlength(logicalName) == 0 || ~isvarname(char(logicalName))
-            error('SimpleFramework:Step5InvalidNRFLogicalName', ...
-                ['NRF request "%s" does not yield a valid logical template name. ', ...
-                 'Use a .mat basename that is a valid MATLAB identifier.'], char(templateRequest));
-        end
-        if isempty(resolvedTemplate)
-            error('SimpleFramework:Step5NRFTemplateNotFound', ...
-                ['Active NRF template "%s" did not resolve to exactly one file. Put one ', ...
-                 'unambiguous .mat file on the configured MATLAB path or provide an explicit ', ...
-                 'file path before running Step 5.3.'], ...
-                char(templateRequest));
-        end
-        logicalComputeNames(iTemplate) = logicalName;
-        resolvedComputeFiles(iTemplate) = string(resolvedTemplate);
+    if any(ismissing(overlayNRFReferences_to_plot)) || ...
+            any(strlength(strtrim(overlayNRFReferences_to_plot)) == 0)
+        error('SimpleFramework:Step5InvalidNRFTemplateRequest', ...
+            'Every plotted NRF template request must be non-empty.');
     end
 
-    if numel(unique(logicalComputeNames)) ~= numel(logicalComputeNames)
+    overlayNRFNames_to_compute = strings(size(overlayNRFReferences_to_compute));
+    overlayNRFFiles_to_compute = strings(size(overlayNRFReferences_to_compute));
+    for iTemplate = 1:numel(overlayNRFReferences_to_compute)
+        [logicalName, templateFile] = NRFUtils.resolveTemplateFile( ...
+            overlayNRFReferences_to_compute(iTemplate), baseDir);
+        overlayNRFNames_to_compute(iTemplate) = string(logicalName);
+        overlayNRFFiles_to_compute(iTemplate) = string(templateFile);
+    end
+    if numel(unique(overlayNRFNames_to_compute)) ~= numel(overlayNRFNames_to_compute)
         error('SimpleFramework:Step5DuplicateNRFLogicalName', ...
             'Active NRF requests must yield unique logical template names.');
     end
 
-    logicalPlotNames = strings(numel(overlayNRFNames_to_plot),1);
-    for iTemplate = 1:numel(overlayNRFNames_to_plot)
-        plotRequest = strtrim(overlayNRFNames_to_plot(iTemplate));
-        [~, plotBase, plotExt] = fileparts(char(plotRequest));
-        if contains(plotRequest, filesep) || strcmpi(plotExt, '.mat')
-            logicalPlotNames(iTemplate) = string(plotBase);
-        else
-            logicalPlotNames(iTemplate) = plotRequest;
+    overlayNRFNames_to_plot = strings(size(overlayNRFReferences_to_plot));
+    overlayNRFFiles_to_plot = strings(size(overlayNRFReferences_to_plot));
+    for iTemplate = 1:numel(overlayNRFReferences_to_plot)
+        [logicalName, templateFile] = NRFUtils.resolveTemplateFile( ...
+            overlayNRFReferences_to_plot(iTemplate), baseDir);
+        overlayNRFNames_to_plot(iTemplate) = string(logicalName);
+        overlayNRFFiles_to_plot(iTemplate) = string(templateFile);
+        computeIndex = find(overlayNRFNames_to_compute == ...
+            overlayNRFNames_to_plot(iTemplate));
+        if isempty(computeIndex)
+            error('Config error: overlayNRFNames_to_plot contains a template not in overlayNRFNames_to_compute: %s', ...
+                overlayNRFNames_to_plot(iTemplate));
+        end
+        if overlayNRFFiles_to_compute(computeIndex) ~= ...
+                overlayNRFFiles_to_plot(iTemplate)
+            error(['Config error: plotted and computed NRF references share logical name "%s" ', ...
+                'but resolve to different template files.'], ...
+                overlayNRFNames_to_plot(iTemplate));
         end
     end
-    if any(ismissing(logicalPlotNames)) || any(strlength(logicalPlotNames) == 0)
-        error('SimpleFramework:Step5InvalidNRFTemplateRequest', ...
-            'Every plotted NRF template request must yield a non-empty logical name.');
-    end
-    bad = logicalPlotNames(~ismember(logicalPlotNames, logicalComputeNames));
-    if ~isempty(bad)
-        error('Config error: overlayNRFNames_to_plot contains names not in overlayNRFNames_to_compute: %s', ...
-            strjoin(cellstr(bad), ', '));
-    end
-    for iTemplate = 1:numel(logicalComputeNames)
-        logicalNameChar = char(logicalComputeNames(iTemplate));
+    for iTemplate = 1:numel(overlayNRFNames_to_compute)
+        logicalNameChar = char(overlayNRFNames_to_compute(iTemplate));
         if ~isfield(fit_time_map, logicalNameChar) || ~isfield(jitter_map, logicalNameChar)
             error('SimpleFramework:Step5NRFFitConfigMissing', ...
                 'NRF "%s" requires fit_time_map and jitter_map entries.', logicalNameChar);
         end
     end
-    for iTemplate = 1:numel(logicalPlotNames)
-        logicalNameChar = char(logicalPlotNames(iTemplate));
+    for iTemplate = 1:numel(overlayNRFNames_to_plot)
+        logicalNameChar = char(overlayNRFNames_to_plot(iTemplate));
         if ~isfield(overlayColours, logicalNameChar)
             error('SimpleFramework:Step5NRFColourMissing', ...
                 'Plotted NRF "%s" requires an overlayColours entry.', logicalNameChar);
         end
     end
-
-    overlayNRFNames_to_compute = logicalComputeNames;
-    overlayNRFFiles_to_compute = resolvedComputeFiles;
-    overlayNRFNames_to_plot = logicalPlotNames;
 else
     overlayNRFNames_to_compute = strings(0,1);
     overlayNRFFiles_to_compute = strings(0,1);
     overlayNRFNames_to_plot = strings(0,1);
+    overlayNRFFiles_to_plot = strings(0,1);
 end
 
 % Root, input, configuration, helper, logger, and active-template preflights
@@ -921,7 +878,12 @@ if getNRFOverlays && ~isempty(overlayNRFNames_to_compute)
         fit_time_ms = fit_time_map.(nameChar);
         jitter_ms   = jitter_map.(nameChar);
 
-        [overlay_ts, fitStruct] = ts_nrf_overlay(ts_avg, thisNRFFile, times_ms, fit_time_ms, jitter_ms);
+        [overlay_ts, fitStruct] = ts_nrf_overlay( ...
+            ts_avg, thisNRFFile, times_ms, fit_time_ms, jitter_ms);
+        assert(strcmp(fitStruct.nrfName, nameChar) && ...
+            strcmp(fitStruct.nrfFile, char(thisNRFFile)), ...
+            'Internal error: NRF overlay provenance does not match the resolved request for %s.', ...
+            nameChar);
 
         overlayTS.(nameChar)   = overlay_ts;
         overlayFits.(nameChar) = fitStruct;
