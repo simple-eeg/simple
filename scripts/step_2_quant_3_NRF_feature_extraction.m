@@ -41,10 +41,11 @@ families = {'early_NRF','noxious_NRF','noxious_preterm_NRF'};
 %% --- Initialize EEGLAB and repository-local functions ---
 eeglab;
 addpath(functionsFolder, '-begin');
-clear estimate_response jittercorrect NRFUtils;
+clear estimate_response jittercorrect NRFUtils validate_dataset_registry_paths;
 rehash;
 
-requiredLocalFunctions = {'estimate_response', 'jittercorrect', 'NRFUtils'};
+requiredLocalFunctions = {'estimate_response', 'jittercorrect', 'NRFUtils', ...
+    'validate_dataset_registry_paths'};
 for functionIdx = 1:numel(requiredLocalFunctions)
     functionName = requiredLocalFunctions{functionIdx};
     expectedFunction = fullfile(functionsFolder, [functionName, '.m']);
@@ -92,6 +93,8 @@ missingCols = setdiff(needCols, T.Properties.VariableNames);
 if ~isempty(missingCols)
     error('Missing required columns in dataset_list.csv: %s', strjoin(missingCols, ', '));
 end
+
+validate_dataset_registry_paths(T, baseDir, 'processed');
 
 %% --- Process datasets ---
 N = height(T);
@@ -167,8 +170,15 @@ for i = 1:N
     missing_str = ''; if ~isempty(missing), missing_str = strjoin(missing, ' , '); end
     fprintf('   channels — present: %s | missing: %s\n', present_str, missing_str);
 
-    % --- Clear previous NRF results (keep QC subtree intact) ---
+    % --- Detect and clear previous NRF results (keep QC subtree intact) ---
+    had_previous_nrf = false;
     for e = 1:nEpochs
+        if isfield(EEG.epoch(e), 'NRF') && ~isempty(EEG.epoch(e).NRF)
+            previous_nrf = EEG.epoch(e).NRF;
+            if ~isstruct(previous_nrf) || ~isempty(fieldnames(previous_nrf))
+                had_previous_nrf = true;
+            end
+        end
         EEG.epoch(e).NRF = struct();
     end
 
@@ -240,8 +250,8 @@ for i = 1:N
         end
     end
 
-    % Save in place if any fits were written
-    if fits_done > 0
+    % Save new fits or persist the removal of previously stored NRF results.
+    if fits_done > 0 || had_previous_nrf
         EEG.filepath = setDir;
         EEG.filename = setFile;
         pop_saveset(EEG, 'filename', setFile, 'filepath', setDir, 'savemode', 'resave');

@@ -269,14 +269,14 @@ require(manifest.get("comparison_policy") == {
 
 catalog = manifest.get("test_catalog")
 coverage = manifest.get("coverage")
-require(isinstance(catalog, list) and len(catalog) == 37, "test catalog count differs")
-require(isinstance(coverage, list) and len(coverage) == 66, "coverage row count differs")
+require(isinstance(catalog, list) and len(catalog) == 40, "test catalog count differs")
+require(isinstance(coverage, list) and len(coverage) == 71, "coverage row count differs")
 catalog_ids = [item.get("id") for item in catalog]
 require(all(isinstance(x, str) and x for x in catalog_ids), "blank catalog id")
 require(len(catalog_ids) == len(set(catalog_ids)), "duplicate catalog id")
 catalog_by_id = {item["id"]: item for item in catalog}
 
-expected_keys = set(["baseline_routes","cleanline_routes","closure_clone","closure_config","closure_current_surface","closure_framework_scope","closure_function_inventory","closure_generated","closure_git","closure_ignore_hyp","closure_ignore_real","closure_logs","closure_manifest","closure_paths","closure_readme","closure_root","closure_step34","closure_step52","closure_step53","closure_templates","closure_viewer_qc_example","config_profiles_cache","delete_contracts","dependency_missing","dependency_present","epoch_failures","epoch_modes","filter_modes","jitter_edges","jitter_shapes_shifts","jitter_ties_padding","line_frequency_edges","line_off_notch","numeric_results","offset_consistency","offset_mapping_fields","offset_no_event","offset_no_source","offset_oob","offset_report_keys","offset_validation","prep_defaults","prep_empty_array","prep_empty_data","prep_inputs","prep_multi_array","preproc_order_history","preprocessing_caller_contract","qc_coord_schema","qc_direct_matrix","qc_overwrite_array_times","reref_modes","resample_modes","resolver_failures_shadow","resolver_local_explicit","response_channel","response_every_epoch_array","response_inputs_defaults","response_insufficient","response_public_contract","response_rate_grid_bounds","response_scalar_options","response_schema_history","response_xor","templates_six_rates","warning_restoration"])
+expected_keys = set(["baseline_routes","cleanline_routes","closure_clone","closure_config","closure_current_surface","closure_framework_scope","closure_function_inventory","closure_generated","closure_git","closure_ignore_hyp","closure_ignore_real","closure_logs","closure_manifest","closure_paths","closure_readme","closure_root","closure_step34","closure_step52","closure_step53","closure_templates","closure_viewer_qc_example","config_profiles_cache","dataset_registry_paths","delete_contracts","dependency_missing","dependency_present","effective_preprocessing_provenance","epoch_failures","epoch_modes","filter_modes","jitter_edges","jitter_shapes_shifts","jitter_ties_padding","line_frequency_edges","line_off_notch","nrf_clear_persistence","nrf_template_preflight","numeric_results","offset_consistency","offset_mapping_fields","offset_no_event","offset_no_source","offset_oob","offset_report_keys","offset_validation","prep_defaults","prep_empty_array","prep_empty_data","prep_inputs","prep_multi_array","preproc_order_history","preprocessing_caller_contract","qc_coord_schema","qc_direct_matrix","qc_overwrite_array_times","registry_write_preflight","reref_modes","resample_modes","resolver_failures_shadow","resolver_local_explicit","response_channel","response_every_epoch_array","response_inputs_defaults","response_insufficient","response_public_contract","response_rate_grid_bounds","response_scalar_options","response_schema_history","response_xor","templates_six_rates","warning_restoration"])
 actual_keys = [row.get("requirement_key") for row in coverage]
 require(len(actual_keys) == len(set(actual_keys)), "duplicate requirement key")
 require(set(actual_keys) == expected_keys, "required coverage-key set differs")
@@ -360,7 +360,7 @@ for item in catalog:
     require(represented == item["expected_pass_count"],
             f"case/pass count differs: {item['id']}")
 
-expected_totals = {"runner_sha256":"20ae11e9623319a71e180f94cc0042c15929c8f832124184126b1b96f4c4b9f8","preproc":30,"response":17,"jitter":11,"qc":284,"clean_contract":18,"extended":120}
+expected_totals = {"runner_sha256":"40533e3d054c03b6edeeac9564c51a97c4004c3e23e49244d566bc7d0a1911c7","preproc":30,"response":17,"jitter":11,"qc":284,"clean_contract":18,"registry":23,"processing_state":9,"extended":120}
 require(manifest.get("expected_runtime_totals") == expected_totals,
         "runtime totals differ from the repository test contract")
 runner_bytes = (root / "tests" / "run_all_tests.m").read_bytes()
@@ -388,6 +388,10 @@ require(catalog_item("matlab.qc.coordinator.oracle")["expected_pass_count"] +
         expected_totals["qc"], "QC total differs")
 require(catalog_item("matlab.clean_api")["expected_pass_count"] ==
         expected_totals["clean_contract"], "clean-contract total differs")
+require(catalog_item("matlab.registry_paths")["expected_pass_count"] ==
+        expected_totals["registry"], "registry-path total differs")
+require(catalog_item("matlab.processing_state")["expected_pass_count"] ==
+        expected_totals["processing_state"], "processing-state total differs")
 
 oracle_path = root / "tests" / "fixtures" / "simple_scientific_oracle_v1.json"
 oracle_json = json.loads(oracle_path.read_text(encoding="utf-8"))
@@ -436,7 +440,7 @@ require(oracle_json["boundaries"] == {
     "university_server_accesses": 0,
     "dependency_updates": 0,
 }, "scientific-oracle boundaries differ")
-print("66 coverage rows; 37 named test groups; exact scientific-oracle cardinalities and binding")
+print("71 coverage rows; 40 named test groups; exact scientific-oracle cardinalities and binding")
 PY
 }
 
@@ -469,11 +473,12 @@ check_function_inventory() {
         ts_average_NRFshifted.m \
         ts_average_simple.m \
         ts_average_woody.m \
-        ts_nrf_overlay.m | LC_ALL=C sort > "$expected"
+        ts_nrf_overlay.m \
+        validate_dataset_registry_paths.m | LC_ALL=C sort > "$expected"
     git -C "$candidate" ls-files functions | sed 's#^functions/##' | LC_ALL=C sort > "$actual"
     diff -u "$expected" "$actual" || return 1
-    [ "$(wc -l < "$actual" | tr -d ' ')" -eq 26 ] || return 1
-    printf 'exact 26-function inventory'
+    [ "$(wc -l < "$actual" | tr -d ' ')" -eq 27 ] || return 1
+    printf 'exact 27-function inventory'
 }
 
 check_template_inventory() {
@@ -517,6 +522,10 @@ required = {
     "functions/quality_control_features.m": [
         "function [EEG] = quality_control_features(EEG)",
     ],
+    "functions/validate_dataset_registry_paths.m": [
+        "function targets = validate_dataset_registry_paths(T, baseDir, stage)",
+        "SIMPLE:DatasetRegistry:CanonicalEscape",
+    ],
     "NRFs/nrf_config.ini": ["[term_foot_nox]"],
     "scripts/log_command_window.m": [
         "logsDir = fullfile(projectRoot, 'data', 'logs');",
@@ -524,6 +533,8 @@ required = {
     "tests/run_all_tests.m": [
         "function results = run_all_tests(repoRoot, eeglabRoot)",
         "simple_scientific_oracle_v1.mat",
+        "results.registry = run_dataset_registry_path_tests(repoRoot);",
+        "results.processing_state = run_processing_state_tests(repoRoot);",
     ],
 }
 for relative, anchors in required.items():
@@ -709,6 +720,10 @@ print("EEGLAB-before-local-path; no preproc shadow; stored provenance field; sep
 PY
 }
 
+check_processing_safety() {
+    python3 "$candidate/tests/check_processing_safety_contracts.py" "$candidate"
+}
+
 check_step3_4() {
     file="$candidate/scripts/step_3_sum_4_plot_epochs.m"
     for token in \
@@ -829,6 +844,7 @@ check_readme() {
         '`robustfit`' \
         '`corr`' \
         'CleanLine is optional' \
+        'Every registry path is validated before a governed write' \
         'tests/run_all_tests.m' \
         'results = run_all_tests(simpleRoot, eeglabRoot);' \
         "tests/run_static_checks.sh"; do
@@ -936,9 +952,12 @@ if root_helper_count != 14 or step5_helper_count != 7:
     issues.append(f"root model differs: framework={root_helper_count}, step5={step5_helper_count}")
 
 caller_anchors = {
-    "step_1_proc_4_preprocessing.m": ["EEG_clean = preproc(", "preprocProvenance", "EEG_pre.etc.simple.preproc"],
-    "step_2_quant_1_QC_feature_extraction.m": ["quality_control_features_with_diagnostics", "calc_KatzFDNorm"],
-    "step_2_quant_3_NRF_feature_extraction.m": ["activeNRFNames{nIdx}, baseDir", "zero_t_ms, baseDir)"],
+    "step_1_proc_3_add_processeds.m": ["validate_dataset_registry_paths(T, baseDir, 'raw')", "validate_dataset_registry_paths(T, baseDir, 'processed')"],
+    "step_1_proc_4_preprocessing.m": ["EEG_clean = preproc(", "preprocProvenance", "EEG_pre.etc.simple.preproc", "validate_dataset_registry_paths(T, baseDir, 'processed')"],
+    "step_2_quant_1_QC_feature_extraction.m": ["quality_control_features_with_diagnostics", "calc_KatzFDNorm", "validate_dataset_registry_paths(T, baseDir, 'processed')"],
+    "step_2_quant_3_NRF_feature_extraction.m": ["activeNRFNames{nIdx}, baseDir", "zero_t_ms, baseDir)", "validate_dataset_registry_paths(T, baseDir, 'processed')"],
+    "step_3_sum_1_add_summaries.m": ["validate_dataset_registry_paths(T, baseDir, 'processed')", "validate_dataset_registry_paths(T, baseDir, 'summary')"],
+    "step_3_sum_2_summarise_individual.m": ["validate_dataset_registry_paths(T, baseDir, 'summary')"],
     "step_3_sum_4_plot_epochs.m": ["resolveTemplateFile(nrfNamesRequested{j}, baseDir)", "nrfTemplateFiles"],
     "step_5_check_2_plot_included_epochs.m": ["requestedReferences(templateIndex), baseDir", "nrfTemplatePaths"],
     "step_5_check_3_plot_average_ts.m": ["overlayNRFReferences_to_compute(iTemplate), baseDir", "overlayNRFFiles_to_compute"],
@@ -962,7 +981,7 @@ for token in ("resolveTemplateFile", "fullfile(repositoryRoot, 'NRFs')", "getCan
         issues.append(f"NRFUtils missing resolver anchor: {token}")
 if issues:
     raise AssertionError("; ".join(issues))
-print("21 derived-root scripts (14+7), eight repository-API callers, post-EEGLAB precedence and direct template resolution")
+print("21 derived-root scripts (14+7), 11 repository-API callers, post-EEGLAB precedence and direct template resolution")
 PY
 }
 
@@ -976,6 +995,7 @@ run_check 'static.git.fresh_clone' check_fresh_clone
 run_check 'static.repository.logs' check_logs
 run_check 'static.repository.viewer_qc_example' check_viewer_qc_example
 run_check 'static.callers.step1_4' check_step1_4
+run_check 'static.repository.processing_safety' check_processing_safety
 run_check 'static.callers.step3_4' check_step3_4
 run_check 'static.callers.step5_2' check_step5_2
 run_check 'static.callers.step5_3' check_step5_3

@@ -73,7 +73,7 @@ functionsDir = fullfile(baseDir, 'functions');
 scriptsDir = fullfile(baseDir, 'scripts');
 addpath(functionsDir, '-begin');
 addpath(scriptsDir, '-begin');
-clear log_command_window
+clear log_command_window validate_dataset_registry_paths
 rehash path
 expectedLogger = fullfile(scriptsDir, 'log_command_window.m');
 resolvedLogger = which('log_command_window');
@@ -81,6 +81,13 @@ assert(~isempty(resolvedLogger) && ...
     strcmp(char(java.io.File(resolvedLogger).getCanonicalPath()), ...
            char(java.io.File(expectedLogger).getCanonicalPath())), ...
     'Repository-local logger did not remain authoritative after EEGLAB startup.');
+expectedValidator = fullfile(functionsDir, ...
+    'validate_dataset_registry_paths.m');
+resolvedValidator = which('validate_dataset_registry_paths');
+assert(~isempty(resolvedValidator) && ...
+    strcmp(char(java.io.File(resolvedValidator).getCanonicalPath()), ...
+           char(java.io.File(expectedValidator).getCanonicalPath())), ...
+    'Repository-local dataset-registry validator did not remain authoritative after EEGLAB startup.');
 
 %% 2) Read spreadsheet and validate required input columns
 
@@ -107,6 +114,8 @@ for i = 1:numel(need)
     T.(col) = string(T.(col));
     T.(col)(ismissing(T.(col))) = "";
 end
+
+validate_dataset_registry_paths(T, baseDir, 'summary');
 
 N = height(T);
 

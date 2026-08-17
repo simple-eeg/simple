@@ -91,7 +91,7 @@ MATLAB helper functions and utility code used by the runnable scripts.
 The repository is self-contained: this directory includes `preproc`,
 `quality_control_features` and its 11 `calc_*` functions,
 `estimate_response`, `jittercorrect`, `NRFUtils`, event helpers, averaging and
-post-screening helpers.
+post-screening helpers, and the dataset-registry path validator.
 
 ### `NRFs/`
 
@@ -162,9 +162,16 @@ selected.
 
 ### Expected input data
 
-The workflow expects EEG datasets stored as EEGLAB `.set` files. For each dataset, `data_lists/dataset_list.csv` supplies the project-relative raw-data path in `path_raw` and the `.set` filename in `EEGfile_raw`. Subject, session, and run identifiers are held separately in the `subjectID`, `sessionID`, and `runID` columns; the scripts do not infer those identifiers from a strict filename convention.
+The workflow expects EEG datasets stored as EEGLAB `.set` files. For each dataset, `data_lists/dataset_list.csv` supplies the project-relative raw-data path in `path_raw` and a basename with the exact lowercase `.set` extension in `EEGfile_raw`. Subject, session, and run identifiers are held separately in the `subjectID`, `sessionID`, and `runID` columns; the scripts do not infer those identifiers from a strict filename convention.
 
-Raw paths should begin with `data/raw`, because the workflow derives processed paths by replacing that leading component with `data/processed`.
+Raw directories must be `data/raw` or descendants of it. Derived processed and
+summary directories must likewise be under the exact `data/processed` and
+`data/summary` roots. Paths must be non-empty project-relative forward-slash
+paths: absolute paths, traversal components, repeated separators, backslashes,
+path-like filenames and symlink-based canonical escapes are rejected. Processed dataset
+targets and the four per-dataset summary targets must be unique.
+Every registry path is validated before a governed write, so an invalid row stops the stage
+before the registry, a dataset or a summary output is changed.
 
 For example, one row could specify:
 
@@ -288,7 +295,10 @@ It records dataset identifiers and file paths, and later gains additional derive
 - `epoch_types`
 - `path_summary`
 
-The workflow assumes that this file correctly points to the raw and processed datasets used in each stage.
+The workflow validates the complete registry before every stage that derives
+or writes processed or per-dataset summary targets. A row with a missing or
+unsafe required path or filename stops that stage before its first governed
+write.
 
 ### `NRFs/nrf_config.ini`
 
@@ -653,7 +663,8 @@ The screening package includes a SHA-256 hash tying it to the pooled inputs and 
 
 `tests/run_all_tests.m` exercises preprocessing, response estimation, jitter
 correction, all QC features, event helpers, NRF resolution and overlays,
-configuration/cache behaviour, dependency failure modes and logging against a
+configuration/cache behaviour, registry paths, effective preprocessing
+provenance, stale-NRF clearing, dependency failure modes and logging against a
 frozen synthetic oracle. Numerical outputs use strict `isequaln` comparison.
 Run it only in the accepted isolated MATLAB/EEGLAB test
 environment.
