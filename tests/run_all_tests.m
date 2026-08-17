@@ -47,7 +47,7 @@ assert_path(which('quality_control_features'), ...
 assert_template_inventory(oracle.templates, templatesRoot);
 basePath = path;
 results = struct();
-results.schema = 'simple-framework-tests-v1';
+results.schema = 'simple-tests-v1';
 results.preproc = run_preproc_oracles(oracle.preproc, testsRoot, ...
     functionsRoot, basePath);
 path(basePath);

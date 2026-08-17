@@ -19,7 +19,7 @@ The repository is written in MATLAB and is organised as a five-step workflow:
 These five stages correspond directly to Steps 3–7 in `simple-oxford` and
 `simple-strasbourg`:
 
-| `simple-framework` | `simple-oxford` / `simple-strasbourg` |
+| `simple` | `simple-oxford` / `simple-strasbourg` |
 | --- | --- |
 | Step 1: `proc` | Step 3 |
 | Step 2: `quant` | Step 4 |
@@ -661,8 +661,8 @@ environment.
 From MATLAB, call the runner with explicit repository and EEGLAB roots:
 
 ```matlab
-addpath(fullfile(frameworkRoot, 'tests'), '-begin');
-results = run_all_tests(frameworkRoot, eeglabRoot);
+addpath(fullfile(simpleRoot, 'tests'), '-begin');
+results = run_all_tests(simpleRoot, eeglabRoot);
 assert(results.passed);
 ```
 

@@ -1,6 +1,6 @@
 {
   "schema": "simple-repository-coverage-v1",
-  "repository": "simple-framework",
+  "repository": "simple",
   "baseline": 1,
   "comparison_policy": {
     "exact_behaviour": "strict isequaln",
@@ -8,7 +8,7 @@
     "relative_tolerance": 0
   },
   "expected_runtime_totals": {
-    "runner_sha256": "704c96aebcabb19a1bd013369c7fd1879912f83dbd87663c5f11811b38e4950e",
+    "runner_sha256": "20ae11e9623319a71e180f94cc0042c15929c8f832124184126b1b96f4c4b9f8",
     "preproc": 30,
     "response": 17,
     "jitter": 11,

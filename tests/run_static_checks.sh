@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Finite static/Git checks for the simple-framework repository baseline.
+# Finite static/Git checks for the simple repository baseline.
 # The candidate is built from tracked-current files and untracked source files
 # under the documented top-level contract. Project data and external artefacts
 # are neither listed nor copied.
@@ -47,7 +47,7 @@ PY
     mkdir -p -- "$result_root" || exit 2
     result_root=$(CDPATH='' cd -- "$result_root" && pwd -P)
 elif [ "$#" -eq 0 ]; then
-    result_root=$(mktemp -d "${TMPDIR:-/tmp}/simple-framework-static.XXXXXX") || exit 2
+    result_root=$(mktemp -d "${TMPDIR:-/tmp}/simple-static.XXXXXX") || exit 2
 else
     printf 'Usage: %s [--result-dir OUTSIDE_REPOSITORY]\n' "$0" >&2
     exit 2
@@ -259,7 +259,7 @@ def require(condition, message):
         raise AssertionError(message)
 
 require(manifest.get("schema") == "simple-repository-coverage-v1", "bad manifest schema")
-require(manifest.get("repository") == "simple-framework", "bad repository identity")
+require(manifest.get("repository") == "simple", "bad repository identity")
 require(manifest.get("baseline") == 1, "bad baseline identity")
 require(manifest.get("comparison_policy") == {
     "exact_behaviour": "strict isequaln",
@@ -360,7 +360,7 @@ for item in catalog:
     require(represented == item["expected_pass_count"],
             f"case/pass count differs: {item['id']}")
 
-expected_totals = {"runner_sha256":"704c96aebcabb19a1bd013369c7fd1879912f83dbd87663c5f11811b38e4950e","preproc":30,"response":17,"jitter":11,"qc":284,"clean_contract":18,"extended":120}
+expected_totals = {"runner_sha256":"20ae11e9623319a71e180f94cc0042c15929c8f832124184126b1b96f4c4b9f8","preproc":30,"response":17,"jitter":11,"qc":284,"clean_contract":18,"extended":120}
 require(manifest.get("expected_runtime_totals") == expected_totals,
         "runtime totals differ from the repository test contract")
 runner_bytes = (root / "tests" / "run_all_tests.m").read_bytes()
@@ -830,7 +830,7 @@ check_readme() {
         '`corr`' \
         'CleanLine is optional' \
         'tests/run_all_tests.m' \
-        'results = run_all_tests(frameworkRoot, eeglabRoot);' \
+        'results = run_all_tests(simpleRoot, eeglabRoot);' \
         "tests/run_static_checks.sh"; do
         grep -Fq "$token" "$file" || {
             printf 'README contract anchor missing: %s\n' "$token"
@@ -1000,7 +1000,7 @@ with open(checks_path, newline="", encoding="utf-8") as handle:
     checks = list(csv.DictReader(handle, delimiter="\t"))
 failures = [item for item in checks if item["status"] != "PASS"]
 summary = {
-    "schema": "simple-framework-static-check-results-v1",
+    "schema": "simple-static-check-results-v1",
     "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "repository_source": str(pathlib.Path(repo).resolve()),
     "ephemeral_candidate_commit": commit,
