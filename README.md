@@ -521,6 +521,10 @@ Scripts:
 - saves screening decisions atomically
 - applies screening decisions to the pooled outputs
 
+The Step 4.2 viewer offers `File > Save PDF...` to save the complete current
+display, including all plots and the Navigator, to a PDF location chosen by
+the user. Exporting this snapshot does not change the screening decisions.
+
 ### Main outputs
 
 - `screening_package.mat`
