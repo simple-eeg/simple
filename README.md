@@ -95,23 +95,29 @@ post-screening helpers, and the dataset-registry path validator.
 
 ### `NRFs/`
 
-Six bundled NRF templates at 500 Hz and 2,000 Hz, together with the tracked
+Three bundled NRF templates at 500 Hz, together with the tracked
 `nrf_config.ini`. Logical template names resolve only against this directory;
 explicit canonical MAT-file paths are also supported where documented. The
 MATLAB path is not used to discover templates.
 
 - `early_NRF_500Hz.mat`
-- `early_NRF_2000Hz.mat`
 - `noxious_NRF_500Hz.mat`
-- `noxious_NRF_2000Hz.mat`
 - `noxious_preterm_NRF_500Hz.mat`
-- `noxious_preterm_NRF_2000Hz.mat`
+
+Each MAT file stores a real double column vector `NRF` and scalar `fs = 500`.
+Each stored NRF has mean zero and discrete L2 norm one within floating-point
+precision. The dimensionless template gives its signed fitted coefficient
+the EEG input's unit; that coefficient is not a peak EEG amplitude. The
+template and EEG sampling rates must match; the estimator does not resample
+templates.
 
 The principal APIs are `preproc(EEG, options)`,
 `estimate_response(EEG, options)`, `jittercorrect`,
-`quality_control_features` and `add_offset_events`. The shipped profiles define
-the demonstrator's exact `Cz` channel and term-foot NRF post start of 400 ms;
-profile values are project configuration rather than universal SIMPLE defaults.
+`quality_control_features` and `add_offset_events`. The synthetic demonstrator
+fits two term-foot profiles at `Cz`. Before jitter alignment, the early fit
+spans 100–350 ms (126 samples) and the later fit spans 400–700 ms (151 samples).
+Both ranges include the first and last sample. Both profiles use a 200 ms
+pre-event baseline and allow a shift of up to 100 ms in either direction.
 
 ### `scripts/`
 
@@ -209,18 +215,20 @@ input contract is deliberately narrow:
 - one row per recording in `data_lists/dataset_list.csv`, with project-relative
   `data/raw/...` paths and no absolute or external input location
 
-Step 1.4 creates the exact internal-reference event `stimulus_prestim` at
-−1,500 ms from `stimulus`. The processing, QC, screening and Step 5 numerical
-settings define the demonstrator profile used by the scripts.
+After running `simple-synthetic-eeg-generator`, copy the generated `raw/`
+folder to `data/raw/` and `dataset_list.csv` to `data_lists/dataset_list.csv`.
+Step 1.4 resamples each recording to 500 Hz and creates the internal-reference
+event `stimulus_prestim` 1,500 ms before `stimulus`.
 
-After Step 2.2, inspect the event/channel/epoch inventories and edit the
-generated `data/info/epoch_types/epoch_type_summary.csv` as follows before
-Step 2.3:
+Step 2.2 writes `data/info/epoch_types/epoch_type_summary.csv` with empty
+NRF columns each time it runs. Check the event, channel and epoch inventories,
+then fill in the four profile names below and leave the preterm cells empty
+before running Step 2.3.
 
 | `Type` | `early_NRF` | `noxious_NRF` | `noxious_preterm_NRF` |
 | --- | --- | --- | --- |
-| `stimulus` | `term_foot_early` | `term_foot_nox` | blank |
-| `stimulus_prestim` | `term_foot_early` | `term_foot_nox` | blank |
+| `stimulus` | `term_foot_early` | `term_foot_nox` | |
+| `stimulus_prestim` | `term_foot_early` | `term_foot_nox` | |
 
 The public `early_NRF_500Hz.mat` and `noxious_NRF_500Hz.mat` templates are
 bundled under `NRFs/`. NRF consumers bind logical names to that repository-local
@@ -256,7 +264,7 @@ before selecting the next script:
 | Step 3.3 pooled summaries | 62 QC rows, 124 NRF rows, 31 manifest rows and 31 epoch structures |
 | Step 3.4 pooled plots | inspect all 31 true `stimulus` items; do not save figures |
 | Step 4.1 package | one immutable 62-item schema-v2 package; do not rerun |
-| Step 4.2 viewer | screen manually; explicitly state when iterative review is complete |
+| Step 4.2 viewer | review the items, mark exclusions, then click **Finish** |
 | Step 4.3 apply decisions | exact decision binding and exclusion propagation; expected 61 retained items |
 | Step 5.1 excluded figures | one complete rollback-safe excluded-image batch |
 | Step 5.2 included epochs | inspect every retained true item and configured overlays |
@@ -451,13 +459,8 @@ Before running `step_2_quant_3_NRF_feature_extraction.m`:
 
 1. inspect the outputs in `data/info/epoch_types/multievent_epochs/`
 2. check for unexpected multi-event epochs, including possible overlap between true and internal-reference epochs
-3. edit `data/info/epoch_types/epoch_type_summary.csv`
-4. add valid profile names from `nrf_config.ini` into:
-   - `early_NRF`
-   - `noxious_NRF`
-   - `noxious_preterm_NRF`
-
-NRF extraction will not do useful work unless at least one valid mapping has been defined.
+3. enter a profile for each selected NRF family and epoch type in `data/info/epoch_types/epoch_type_summary.csv`.
+   For the tutorial dataset, use the [synthetic demonstrator mapping](#fixed-synthetic-demonstrator-route).
 
 ## Step 3: summarisation and pooling
 
