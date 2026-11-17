@@ -1,677 +1,479 @@
 # SIMPLE Framework
 
-A MATLAB implementation of SIMPLE (Single-event Measurement Pipeline for EEG), a framework that links each event-channel item's EEG and quality-control (QC) evidence to its screening decision and retained analytical outputs.
+SIMPLE (Single-event Measurement Pipeline for EEG) is a MATLAB framework for
+analysing individual EEG events. It keeps each event's waveform and
+quality-control (QC) information linked to the researcher's screening decision
+and the data retained for analysis. Each screened item is one event at one
+recording channel.
 
 **Software credits:** [Marianne van der Vaart](https://github.com/mvandervaart), [Simon Marchant](https://github.com/simonmarchant), and [Luke Baxter](https://github.com/lukebax) contributed equally to the development of this software.
 
-**Associated methods paper:** [Add citation and link here when available]
+**Associated methods paper:** citation and link to be added when available.
 
-## Repository overview
+## Start here
 
-SIMPLE analyses one event occurrence at one channel, without trial averaging or interchangeable channels. Preprocessing, QC description, response quantification, human screening, and post-screening descriptive checks form the framework. Downstream analyses define participant contributions and account for repeated observations where applicable.
+This repository provides the shared workflow and a worked synthetic example.
+It is intended for offline event-related EEG analysis, particularly when few
+trials or channels are available. Neonatal noxious-evoked EEG is a central
+application; other applications require their own scientific justification
+and settings. The workflow includes manual inspection and screening. It is
+not a general-purpose EEG toolbox, a real-time system, a clinical diagnostic
+tool, or a conventional multichannel event-related-potential pipeline.
 
-The repository is written in MATLAB and is organised as a five-step workflow:
+Choose the repository for your task:
 
-1. **proc** – inspect raw data and create processed, epoched datasets
-2. **quant** – extract quality-control and response features
-3. **sum** – export and pool summaries
-4. **screen** – record and apply human epoch–channel screening decisions
-5. **check** – run post-screening descriptive checks
-
-These five stages correspond directly to Steps 3–7 in `simple-oxford` and
-`simple-strasbourg`:
-
-| `simple` | `simple-oxford` / `simple-strasbourg` |
+| Repository | Purpose |
 | --- | --- |
-| Step 1: `proc` | Step 3 |
-| Step 2: `quant` | Step 4 |
-| Step 3: `sum` | Step 5 |
-| Step 4: `screen` | Step 6 |
-| Step 5: `check` | Step 7 |
+| **simple** (this repository) | Work through the synthetic example, understand the shared stages, or adapt the framework to another study. |
+| [simple-synthetic-eeg-generator](https://github.com/simple-eeg/simple-synthetic-eeg-generator) | Create the synthetic EEG files used by the example. |
+| [simple-oxford](https://github.com/simple-eeg/simple-oxford) | Use the Oxford workflow, including source preparation and downstream analyses. The methods paper uses the Petal trial. |
+| [simple-strasbourg](https://github.com/simple-eeg/simple-strasbourg) | Use the NOCI-Prem workflow and its post-screening descriptive figure. |
 
-The dataset-specific repositories document their own import and group-analysis
-stages. This README provides the detailed reference for the shared five-stage
-framework.
+Each MATLAB repository includes its own helper functions. The clinical
+repositories use this README as a shared guide; they do not require a second
+copy of `simple`. Clinical recordings are not included. To try the framework
+without clinical data, follow the [synthetic tutorial](#synthetic-tutorial).
 
-## What this repository is for
+**Guide:** [Before you begin](#before-you-begin) ·
+[Synthetic tutorial](#synthetic-tutorial) ·
+[Workflow reference](#workflow-reference) ·
+[Configuration reference](#configuration-reference) ·
+[Technical reference](#technical-reference) · [Tests](#tests)
 
-This repository is for:
+### Terms used in this guide
 
-- offline analysis of event-related EEG
-- preparing retained outputs for downstream analysis
-- settings with very limited within-participant redundancy
-- sparse channel configurations
-- workflows that keep preprocessing, screening decisions, and retained outputs traceable
-
-Neonatal noxious-evoked EEG is a central application; the framework may also be useful in other settings without repeated trials or interchangeable channels.
-
-## What this repository is not for
-
-This repository is not intended to be:
-
-- a general-purpose EEG toolbox
-- a real-time or online analysis system
-- a subject-level diagnostic or predictive tool
-- a generic multichannel ERP pipeline
-- a one-click workflow with no user judgement or inspection points
-
-## How to approach this repository
-
-This repository is best understood as a **staged workflow with defined user intervention points**, not as a single script to run from start to finish without inspection.
-
-Before running the scripts, read:
-
-- **Before you begin**
-- **Core input and configuration files**
-- **Workflow overview**
-- **Points where user input or inspection is required**
-
-Several steps require you to inspect generated outputs, edit configuration files, or make explicit screening decisions before moving on.
-
-## Repository structure
-
-Data, logs, generated outputs, screening decisions, and downstream analysis
-files are local working materials excluded from version control. A fresh clone
-contains an empty `data/` and `data_lists/` through tracked `.gitkeep` files,
-plus the workflow code, bundled templates, configuration, tests and
-documentation.
-
-`data/` and `data_lists/` are deliberately present through tracked `.gitkeep`
-files; generated descendants remain local.
-
-### `data_lists/`
-
-Core metadata and configuration files used by the workflow.
-
-`dataset_list.csv` and any other CSV/XLSX project lists are local and ignored.
-The tracked NRF configuration is under `NRFs/`, not this directory.
-
-### `functions/`
-
-MATLAB helper functions and utility code used by the runnable scripts.
-
-The repository is self-contained: this directory includes `preproc`,
-`quality_control_features` and its 11 `calc_*` functions,
-`estimate_response`, `jittercorrect`, `NRFUtils`, event helpers, averaging and
-post-screening helpers, and the dataset-registry path validator.
-
-### `NRFs/`
-
-Three bundled NRF templates at 500 Hz, together with the tracked
-`nrf_config.ini`. Logical template names resolve only against this directory;
-explicit canonical MAT-file paths are also supported where documented. The
-MATLAB path is not used to discover templates.
-
-- `early_NRF_500Hz.mat`
-- `noxious_NRF_500Hz.mat`
-- `noxious_preterm_NRF_500Hz.mat`
-
-Each MAT file stores a real double column vector `NRF` and scalar `fs = 500`.
-Each stored NRF has mean zero and discrete L2 norm one within floating-point
-precision. The dimensionless template gives its signed fitted coefficient
-the EEG input's unit; that coefficient is not a peak EEG amplitude. The
-template and EEG sampling rates must match; the estimator does not resample
-templates.
-
-The principal APIs are `preproc(EEG, options)`,
-`estimate_response(EEG, options)`, `jittercorrect`,
-`quality_control_features` and `add_offset_events`. The synthetic demonstrator
-fits two term-foot profiles at `Cz`. Before jitter alignment, the early fit
-spans 100–350 ms (126 samples) and the later fit spans 400–700 ms (151 samples).
-Both ranges include the first and last sample. Both profiles use a 200 ms
-pre-event baseline and allow a shift of up to 100 ms in either direction.
-
-### `scripts/`
-
-Runnable MATLAB scripts organised into the five workflow stages.
-
-This folder also contains `log_command_window.m`, which is used by the scripts to write per-script log files.
-
-### `data/info/`
-
-Intermediate audit and inventory outputs, such as summaries of:
-
-- event types
-- channel labels
-- epoch types
-- multi-event epochs
-
-These outputs are intended for inspection and quality checks during the workflow.
-
-### `data/summary/`
-
-Per-dataset and pooled summary outputs, then screening outputs and post-screening outputs.
-
-### `tests/`
-
-Synthetic regression fixtures, the complete MATLAB test runner and a finite
-static/Git verifier. These tests use synthetic fixtures and do not require or
-inspect real EEG data.
-
-### `data/logs/`
-
-Ignored per-script Command Window logs written by `log_command_window.m`.
+- An **epoch** is a segment of EEG around an event. An **epoch–channel item**
+  is that segment at one recording channel; it is the unit screened here.
+  Other trials or channels are not averaged into or substituted for that item.
+- A **true-event epoch** contains the event of interest. An
+  **internal-reference epoch** provides non-target EEG from the same recording
+  and channel. The tutorial uses a period before the true event.
+- **QC features** describe properties of the signal that a researcher can
+  consider alongside its waveform during screening.
+- A **neurodynamic response function (NRF)** is a predefined temporal response
+  shape fitted to the EEG. Its fitted magnitude quantifies the response; it
+  is not used to decide which items to exclude during screening.
 
 ## Before you begin
 
-### Software requirements
+### Software
 
-This repository assumes access to:
+You need MATLAB, EEGLAB, and the toolboxes used by the selected steps:
 
-- **MATLAB**
-- **EEGLAB**
-- the MATLAB toolboxes required by the specific functions you use
+- Statistics and Machine Learning Toolbox for operations such as `corr` and
+  `robustfit`;
+- Econometrics Toolbox for `fgls`;
+- Signal Processing Toolbox for filtering and spectral checks; and
+- Wavelet Toolbox for the time–frequency check.
 
-The currently verified producing environment is MATLAB R2026a Update 4 with
-EEGLAB 2026.0.0. The complete regression suite additionally exercises required
-dependencies including `corr`, `robustfit`, `fgls` and EEGLAB functions.
-CleanLine is optional; the notch-filter route is available when it is not
-selected.
+The verified workflow environment is MATLAB R2026a Update 4 with EEGLAB
+2026.0.0. The [regression tests](#tests) explicitly require those versions.
+CleanLine is optional; preprocessing uses the configured notch-filter route
+when CleanLine is not selected.
 
-### Expected input data
+### Get the code and open it in MATLAB
 
-The workflow expects EEG datasets stored as EEGLAB `.set` files. For each dataset, `data_lists/dataset_list.csv` supplies the project-relative raw-data path in `path_raw` and a basename with the exact lowercase `.set` extension in `EEGfile_raw`. Subject, session, and run identifiers are held separately in the `subjectID`, `sessionID`, and `runID` columns; the scripts do not infer those identifiers from a strict filename convention.
+With Git installed, open a terminal in the folder where you want to keep the
+repository and run:
 
-Raw directories must be `data/raw` or descendants of it. Derived processed and
-summary directories must likewise be under the exact `data/processed` and
-`data/summary` roots. Paths must be non-empty project-relative forward-slash
-paths: absolute paths, traversal components, repeated separators, backslashes,
-path-like filenames and symlink-based canonical escapes are rejected. Processed dataset
-targets and the four per-dataset summary targets must be unique.
-Every registry path is validated before a governed write to processed datasets
-or per-dataset summaries, so an invalid row stops that stage before the registry,
-a dataset, or a summary output is changed.
+```sh
+git clone https://github.com/simple-eeg/simple.git
+```
 
-For example, one row could specify:
+In MATLAB, open the new repository's `scripts/` folder as the Current Folder,
+or add that folder to the MATLAB path. Make EEGLAB available on the MATLAB
+path. Run scripts individually in their numbered order, starting with
+`step_1_proc_1_get_event_types.m` after preparing the inputs below.
+
+The 21 runnable scripts locate this repository from their saved position in
+`scripts/`. You do not need to put a personal project path into them. They
+stop if they cannot locate the repository or the required local helpers.
+
+### Prepare the inputs
+
+A fresh clone contains code, templates, configuration, tests, and empty
+`data/` and `data_lists/` folders. For the worked example, create and copy the
+inputs as described in the [synthetic tutorial](#synthetic-tutorial).
+
+The workflow reads EEGLAB `.set` datasets listed in
+`data_lists/dataset_list.csv`. The list identifies each recording and gives
+its location relative to this repository. For example:
 
 ```text
 subjectID,sessionID,runID,path_raw,EEGfile_raw
 001,01,01,data/raw/sub-001/ses-01/eeg,sub-001_ses-01_run-01_eeg.set
 ```
 
-### Path editing
+Identifiers come from the `subjectID`, `sessionID`, and `runID` columns, rather
+than being inferred from filenames. Keep raw files under `data/raw/` and use
+forward slashes in the list's paths. The exact [path rules](#dataset-path-rules)
+are documented below.
 
-Do not edit a personal absolute project path into the scripts. All 21 runnable
-scripts resolve the project root from their own direct membership in this
-repository's `scripts/` directory and fail closed if that relationship or the
-required repository-local helpers cannot be established. Event, channel, NRF,
-time-window, and output-name settings remain explicit configuration and must be
-reviewed deliberately for any project other than the demonstrator described
-below.
+For another study, review event labels, channels, preprocessing and fitting
+windows, NRF profiles, and output names before running anything. The supplied
+settings describe the tutorial. Acquisition and study-specific source
+preparation precede SIMPLE; participant contributions and group inference
+must be defined for the downstream analysis, accounting for repeated
+observations where applicable.
 
-### Running scripts from the `scripts` folder
+<a id="fixed-synthetic-demonstrator-route"></a>
 
-Run scripts from the `scripts` folder or add that folder to the MATLAB path. Each script resolves its own repository root and binds the repository-local logging helper.
+## Synthetic tutorial
 
-## Fixed synthetic-demonstrator route
+### Create and copy the data
 
-This repository is configured for the Simple Paper synthetic demonstrator. Its
-input contract is deliberately narrow:
+Follow the [generator's setup and generation instructions](https://github.com/simple-eeg/simple-synthetic-eeg-generator#first-time-setup).
+It creates a folder named `simple-synthetic-eeg-demo`. Copy its `raw/` folder
+to `simple/data/raw/` and its `dataset_list.csv` to
+`simple/data_lists/dataset_list.csv`.
 
-- 31 synthetic subjects, `001` through `031`, with session `01` and run `01`
-- one 30-second, 1,000-Hz recording per subject
-- one exact channel label, `Cz`
-- one exact `stimulus` event at 15 seconds (EEGLAB latency 15001)
-- one self-contained, one-file `.set` per recording and no `.fdt` files
-- one row per recording in `data_lists/dataset_list.csv`, with project-relative
-  `data/raw/...` paths and no absolute or external input location
+The fixed example contains:
 
-After running `simple-synthetic-eeg-generator`, copy the generated `raw/`
-folder to `data/raw/` and `dataset_list.csv` to `data_lists/dataset_list.csv`.
-Step 1.4 resamples each recording to 500 Hz and creates the internal-reference
+- 31 synthetic subjects, `001` through `031`, with session `01` and run `01`;
+- one 30-second, 1,000-Hz recording per subject;
+- one channel, with the exact label `Cz`;
+- one `stimulus` event at 15 seconds (EEGLAB latency 15001);
+- one self-contained `.set` file per recording, with no separate `.fdt` data
+  file; and
+- one row per recording in the dataset list, with `data/raw/...` paths
+  relative to this repository.
+
+Step 1.4 resamples the recordings to 500 Hz and adds the internal-reference
 event `stimulus_prestim` 1,500 ms before `stimulus`.
 
-Step 2.2 writes `data/info/epoch_types/epoch_type_summary.csv` with empty
-NRF columns each time it runs. Check the event, channel and epoch inventories,
-then fill in the four profile names below and leave the preterm cells empty
-before running Step 2.3.
+### Map event types to NRF profiles
+
+Step 2.2 creates `data/info/epoch_types/epoch_type_summary.csv`. Its NRF
+columns are empty each time that step runs. Inspect the event, channel, and
+epoch inventories, then enter the following profiles before Step 2.3. Leave
+the preterm column empty.
 
 | `Type` | `early_NRF` | `noxious_NRF` | `noxious_preterm_NRF` |
 | --- | --- | --- | --- |
 | `stimulus` | `term_foot_early` | `term_foot_nox` | |
 | `stimulus_prestim` | `term_foot_early` | `term_foot_nox` | |
 
-The public `early_NRF_500Hz.mat` and `noxious_NRF_500Hz.mat` templates are
-bundled under `NRFs/`. NRF consumers bind logical names to that repository-local
-directory and fail closed if a template is missing or malformed; plotting code
-that documents explicit-path support binds the exact canonical file supplied.
-These templates are analysis dependencies only. They are not generator inputs,
-and their fitted outputs are tutorial template-conditioned measurements rather
-than biological or pain validation.
+The two templates are bundled in `NRFs/`. They are used to analyse the
+synthetic recordings, not to generate them. The fitted values demonstrate
+template-based measurement; they do not validate biological or pain responses.
 
-The expected pre-screening route has 62 epoch–channel items and 124 NRF rows.
-Screening remains manual: subject 31's true `stimulus` item contains the
-declared artefact and is the expected sole exclusion, but no script applies
-that decision automatically. If the displayed evidence does not support that
-decision, stop rather than forcing the expected count.
+### Run one script at a time
 
-### One-script transaction and stop points
-
-Run one unchanged script at a time from `scripts/`. After each script succeeds,
-errors, or is cancelled, stop and inspect its log and the stated checkpoint
-before selecting the next script:
+Use the supplied settings for this fixed example. After each script, inspect
+its log in `data/logs/` and the checkpoint below before proceeding. If a script
+errors or is cancelled, investigate before continuing. Each run replaces that
+script's previous log.
 
 | Script | Stop and check |
 | --- | --- |
 | Step 1.1 event types | 31 inputs; only the declared raw event labels |
-| Step 1.2 channels | 31 inputs; exact sole channel `Cz` |
-| Step 1.3 processed paths | every derived path remains under `data/processed` |
-| Step 1.4 preprocessing | 31 self-contained processed sets; exact two epoch types and provenance |
-| Step 2.1 QC | all nine configured QC values are present and finite for both items per subject |
-| Step 2.2 epochs | exact `stimulus`/`stimulus_prestim` inventory; no unexpected multi-event epoch |
-| Step 2.3 NRF | approve the mapping table above first; then verify 124 stored fits |
-| Step 3.1 summary paths | every path remains under `data/summary` |
+| Step 1.2 channels | 31 inputs; the sole channel is `Cz` |
+| Step 1.3 processed paths | Every derived path remains under `data/processed` |
+| Step 1.4 preprocessing | 31 self-contained processed sets; exactly two epoch types, with processing records |
+| Step 2.1 QC | All nine configured QC values are present and finite for both items per subject |
+| Step 2.2 epochs | Exactly `stimulus` and `stimulus_prestim`; no unexpected multi-event epoch |
+| Step 2.3 NRF | Complete the mapping table above first, then verify 124 stored fits |
+| Step 3.1 summary paths | Every path remains under `data/summary` |
 | Step 3.2 individual summaries | 31 complete four-file summary groups |
-| Step 3.3 pooled summaries | 62 QC rows, 124 NRF rows, 31 manifest rows and 31 epoch structures |
-| Step 3.4 pooled plots | inspect all 31 true `stimulus` items; do not save figures |
-| Step 4.1 package | one immutable 62-item schema-v2 package; do not rerun |
-| Step 4.2 viewer | review the items, mark exclusions, then click **Finish** |
-| Step 4.3 apply decisions | exact decision binding and exclusion propagation; expected 61 retained items |
-| Step 5.1 excluded figures | one complete rollback-safe excluded-image batch |
-| Step 5.2 included epochs | inspect every retained true item and configured overlays |
-| Step 5.3 average time series | inspect simple-mean trace and early/noxious overlays |
-| Step 5.4 average time–frequency | inspect the fixed 3–30-Hz, mean-baseline view |
-| Step 5.5 average PSD | inspect the fixed post-stimulus multitaper view |
-| Step 5.6 QC separation | verify 30 complete `stimulus - stimulus_prestim` pairs and schema-v2 result |
-| Step 5.7 NRF separation | verify the same 30 pairs for noxious `fglsCoef` and schema-v2 result |
-
-The expected counts are verification checkpoints, not instructions to repair,
-exclude, or reinterpret data until a count matches. A mismatch stops the route
-and is investigated as evidence.
-
-### Logging
-
-Each runnable script starts and stops Command Window logging via `log_command_window('start')` and `log_command_window('stop')`.
-
-Each run replaces that script’s previous log in `data/logs/`. The log is useful for:
-
-- reviewing warnings and errors later
-- checking what happened during a run
-- retaining the current run’s script output
-
-## Core input and configuration files
-
-### `data_lists/dataset_list.csv`
-
-This is the central workflow registry. It is both an input file and a file that is progressively updated by the workflow.
-
-It records dataset identifiers and file paths, and later gains additional derived columns such as:
-
-- `event_types`
-- `channels`
-- `path_processed`
-- `EEGfile_processed`
-- `epoch_types`
-- `path_summary`
-
-The workflow validates the complete registry before every stage that derives
-or writes processed or per-dataset summary targets. A row with a missing or
-unsafe required path or filename stops that stage before its first governed
-write.
-
-### `NRFs/nrf_config.ini`
-
-This file defines named NRF extraction profiles.
-
-Each profile specifies:
-
-- the NRF template name
-- baseline length
-- jitter
-- channel labels
-- one fitting-window start in `projectionTimes_pre` or
-  `projectionTimes_post`, with the other left empty
-
-The defaults in this file are the recommended settings for the current workflow, although advanced users may modify them if needed.
-
-### `data/info/epoch_types/epoch_type_summary.csv`
-
-This file is generated during Step 2 and then manually edited before NRF extraction.
-
-It contains epoch types discovered in the processed data, plus mapping columns for NRF families:
-
-- `early_NRF`
-- `noxious_NRF`
-- `noxious_preterm_NRF`
-
-Before running NRF extraction, you must populate one or more of these columns with valid profile names from `nrf_config.ini`.
-
-Rows or whole columns can be left blank if you do not want to fit that NRF family to those event types.
-
-## Workflow overview
-
-The workflow proceeds through five practical stages:
-
-1. inspect and preprocess raw data
-2. quantify QC and response features
-3. export per-dataset summaries and pooled outputs
-4. screen epoch–channel items explicitly
-5. describe the retained outputs after screening
-
-## How the software stages implement SIMPLE
-
-The manuscript’s five scientific steps are preprocessing and paired-epoch construction, QC description, response quantification, human screening, and post-screening descriptive checks. The software groups these operations into the five practical stages above: Step 1 preprocesses and constructs paired epochs; Step 2 calculates QC features and response estimates; Step 3 assembles linked summaries; Step 4 records and applies screening decisions; and Step 5 describes retained outputs.
-
-Acquisition and study-specific source preparation precede SIMPLE. Participant-contribution rules and group inference apply to its retained outputs.
-
-## Step 1: preprocessing
-
-Step 1 is the practical entry point for the workflow. It audits the raw datasets, standardises them, and creates the processed epoched datasets used downstream.
-
-Scripts:
-
-- `step_1_proc_1_get_event_types.m`
-- `step_1_proc_2_get_channels.m`
-- `step_1_proc_3_add_processeds.m`
-- `step_1_proc_4_preprocessing.m`
-
-### What Step 1 does
-
-- reads `dataset_list.csv`
-- audits raw event labels
-- audits raw channel labels
-- derives processed output paths and filenames
-- preprocesses continuous data
-- deletes unwanted events where configured
-- adds offset or dummy events where configured
-- epochs data around true and internal-reference events
-- writes provenance into processed `.set` files
-
-### Main outputs
-
-- updated `dataset_list.csv`
-- event-type summaries in `data/info/event_types/`
-- channel summaries in `data/info/channels/`
-- processed `.set` files under `data/processed/`
-
-### Relation to the framework
-
-Preprocessing and construction of linked true-event and internal-reference epochs are part of SIMPLE.
-
-### User configuration points
-
-You should review the preprocessing options in `step_1_proc_4_preprocessing.m`, including:
-
-- rereferencing
-- resampling
-- band-pass and line-noise filtering
-- event deletion labels
-- offset event generation
-- epoch windows
-- baseline correction
-
-## Step 2: quantification
-
-Step 2 adds the main quantitative annotations to the processed datasets.
-
-Scripts:
-
-- `step_2_quant_1_QC_feature_extraction.m`
-- `step_2_quant_2_get_epochs.m`
-- `step_2_quant_3_NRF_feature_extraction.m`
-
-Supporting function:
-
-- `NRFUtils.m`
-
-### What Step 2 does
-
-- computes epoch-level QC features for selected channels
-- inventories epoch types in processed datasets
-- reports multi-event epochs
-- maps epoch types to NRF profiles
-- fits NRF-based response features and stores them in the processed `.set` files
-
-### Main outputs
-
-- QC annotations inside processed `.set` files
-- NRF annotations inside processed `.set` files
-- `data/info/epoch_types/epoch_type_summary.csv`
-- `data/info/epoch_types/multievent_epochs/`
-
-### Relation to the framework
-
-This stage provides QC description and response quantification before screening.
-
-### Important user actions before NRF extraction
-
-Before running `step_2_quant_3_NRF_feature_extraction.m`:
-
-1. inspect the outputs in `data/info/epoch_types/multievent_epochs/`
-2. check for unexpected multi-event epochs, including possible overlap between true and internal-reference epochs
-3. enter a profile for each selected NRF family and epoch type in `data/info/epoch_types/epoch_type_summary.csv`.
-   For the tutorial dataset, use the [synthetic demonstrator mapping](#fixed-synthetic-demonstrator-route).
-
-## Step 3: summarisation and pooling
-
-Step 3 exports user-selected summaries from the annotated datasets and builds pooled outputs for downstream screening and checking.
-
-Scripts:
-
-- `step_3_sum_1_add_summaries.m`
-- `step_3_sum_2_summarise_individual.m`
-- `step_3_sum_3_summarise_pooled.m`
-- `step_3_sum_4_plot_epochs.m`
-
-### What Step 3 does
-
-- derives summary output paths
-- exports per-dataset QC feature tables
-- exports per-dataset NRF feature tables
-- exports per-dataset epoch index files
-- exports per-dataset epoch arrays
-- pools those outputs across datasets
-- provides pooled epoch plotting with optional NRF overlays
-
-### Main outputs
-
-Per dataset:
-
-- `<stem>_qc_features.csv`
-- `<stem>_nrf_features.csv`
-- `<stem>_epochs_index.csv`
-- `<stem>_epochs.mat`
-
-Pooled:
-
-- `pooled_eeg_qc_features.csv`
-- `pooled_eeg_nrf_features.csv`
-- `pooled_eeg_epochs.mat`
-- `pooled_eeg_manifest.csv`
-
-### Relation to the framework
-
-This practical summarisation stage assembles waveform and QC evidence for screening and keeps the corresponding response estimates available for later analysis.
-
-### Important note
-
-`step_3_sum_2_summarise_individual.m` skips datasets with multi-event epoch labels. This is one reason the `multievent_epochs` outputs from Step 2 should be inspected before moving on.
-
-## Step 4: human screening
-
-Step 4 makes human epoch–channel screening transparent and traceable.
-
-Scripts:
-
-- `step_4_screen_1_init_package.m`
-- `step_4_screen_2_viewer_rate_epochs.m`
-- `step_4_screen_3_apply_decisions.m`
-
-### What Step 4 does
-
-- creates an immutable screening package from pooled epochs and QC values
-- opens a mouse-driven viewer for manual epoch–channel screening
-- saves screening decisions atomically
-- applies screening decisions to the pooled outputs
-
-Review each item using its waveform and QC evidence; keep NRF magnitudes and downstream group or outcome information out of screening decisions. True-event and internal-reference items receive separate statuses.
-
-The Step 4.2 viewer offers `File > Save PDF...` to save the complete current
-display, including all plots and the Navigator, to a PDF location chosen by
-the user. Exporting this snapshot does not change the screening decisions.
-
-### Main outputs
-
-- `screening_package.mat`
-- `screening_decisions.mat`
-- `pooled_screened_eeg_epochs.mat`
-- `pooled_screened_eeg_qc_features.csv`
-- `pooled_screened_eeg_nrf_features.csv`
-
-### Relation to the framework
-
-This stage records and applies the framework’s human screening decisions.
-
-### Important points
-
-- the screening unit is the **epoch–channel item**
-- screening is performed on **pooled summary outputs**
-- the screening package is intentionally immutable once created
-- package hashes are used to ensure decisions are applied to the correct data
-
-### Workflow order within Step 4
-
-1. initialise the screening package
-2. review and rate items in the screening viewer
-3. apply decisions to create screened outputs
-
-## Step 5: post-screening descriptive checks
-
-Step 5 describes the screened pooled data using visual and quantitative summaries. These checks do not change screening decisions.
-
-Scripts:
-
-- `step_5_check_1_save_excluded_figs.m`
-- `step_5_check_2_plot_included_epochs.m`
-- `step_5_check_3_plot_average_ts.m`
-- `step_5_check_4_plot_average_tf.m`
-- `step_5_check_5_plot_average_psd.m`
-- `step_5_check_6_sep_check_qc.m`
-- `step_5_check_7_sep_check_nrf.m`
-
-### What Step 5 does
-
-- saves plots of excluded items for later review
-- plots included items with optional NRF overlays
-- plots group-average time series
-- plots group-average time–frequency representations
-- plots group-average PSDs
-- performs paired QC separation checks
-- performs paired NRF separation checks
-
-### Main outputs
-
-This stage mainly produces figures, workspace objects, console summaries, and per-script Command Window logs. Step 5.1 writes a rollback-safe, verified excluded-item PNG batch:
-
-- `data/summary/screening/excluded_epochs/`
-
-Steps 5.2–5.5 are display-only apart from their logs. Steps 5.6 and 5.7 atomically write machine-readable paired results using schema `simple-paired-separation-result-v2`:
-
-- `data/summary/screening/step_5_check_6_sep_check_qc_result.mat`
-- `data/summary/screening/step_5_check_7_sep_check_nrf_result.mat`
-
-The paired checks preserve the framework's event–channel/recording-level unit, form each complete `true - internal reference` difference first, and support only the paired median or paired mean with a paired BCa bootstrap interval. Participant reduction is not introduced in Step 5. The current event, NRF, ROI, and overlay choices are labelled exemplar defaults, not universal framework requirements.
-
-Steps 5.2 and 5.3 do not launch EEGLAB or a template-path initialiser. Their
-active logical names resolve directly against this repository's `NRFs/`
-directory; Step 5.3 also accepts an explicit template path and fails closed on
-missing, malformed or conflicting template identity.
-
-### Relation to the framework
-
-This is the framework’s post-screening descriptive stage.
-
-## Points where user input or inspection is required
-
-This workflow includes several manual decision points.
-
-### Before running the workflow
-
-- prepare `dataset_list.csv`
-- ensure raw data are in the expected `data/raw/` structure
-- confirm every script resolves this repository root without a fallback
-- confirm EEGLAB and required toolboxes are available
-
-### During Step 1
-
-- review preprocessing options in `step_1_proc_4_preprocessing.m`
-
-### During Step 2
-
-- inspect event, channel, and epoch inventory outputs
-- inspect `multievent_epochs`
-- edit `epoch_type_summary.csv`
-- optionally edit `nrf_config.ini`
-
-### During Step 3
-
-- choose which channels, event types, QC features, and NRF names to summarise
-
-### During Step 4
-
-- make manual epoch–channel screening decisions in the viewer
-
-### During Step 5
-
-- inspect excluded and included items
-- review the configured Simple, NRF-shifted, or Woody average time-series view and the TF/PSD views
-- review paired separation checks for QC and NRF metrics and their schema-v2 result files
-
-## Key outputs produced by the workflow
-
-Across the full workflow, the most important outputs are:
-
-- processed epoched `.set` files
-- QC-annotated and NRF-annotated `.set` files
-- per-dataset summary CSVs and MAT files
-- pooled QC, NRF, epoch, and manifest outputs
-- immutable screening package and mutable screening decisions
-- screened pooled outputs with `Exclude` flags
-- excluded-item PNGs
-- post-screening descriptive figures and console summaries
-- per-script log files in `data/logs/`
-
-## Logging and provenance
-
-The workflow includes several provenance and audit features.
-
-### Command Window logs
-
-All runnable scripts write to ignored per-script log files in `data/logs/` via
-`log_command_window.m`.
-
-### Provenance in `.set` files
-
-Some processing and quantification steps write structured provenance into `EEG.etc.simple.*`.
-
-### Screening package hash
-
-The screening package includes a SHA-256 hash tying it to the pooled inputs and QC feature list. This helps ensure that screening decisions are only applied to the correct data.
-
-## Regression tests
-
-`tests/run_all_tests.m` exercises preprocessing, response estimation, jitter
-correction, all QC features, event helpers, NRF resolution and overlays,
-configuration/cache behaviour, registry paths, effective preprocessing
-provenance, stale-NRF clearing, dependency failure modes and logging against a
-frozen synthetic oracle. Numerical outputs use strict `isequaln` comparison.
-Run it in an isolated MATLAB session using the versions listed above, with
-EEGLAB’s `option_storedisk` and `option_parallel` options disabled.
-
-Set `simpleRoot` to the repository directory and `eeglabRoot` to the EEGLAB
-installation directory, then call the runner from MATLAB:
+| Step 3.3 pooled summaries | 62 QC rows, 124 NRF rows, 31 manifest rows, and 31 epoch structures |
+| Step 3.4 pooled plots | Inspect all 31 true `stimulus` items; figures are displayed without saving |
+| Step 4.1 package | One fixed 62-item schema-v2 screening package; do not rerun this step |
+| Step 4.2 viewer | Review the items, mark exclusions, then click **Finish** |
+| Step 4.3 apply decisions | Decisions match the package and are applied to all corresponding outputs; expected 61 retained items |
+| Step 5.1 excluded figures | One complete batch of excluded-item images |
+| Step 5.2 included epochs | Inspect every retained true-event item and configured overlay |
+| Step 5.3 average time series | Inspect the simple-mean trace and early/noxious NRF overlays |
+| Step 5.4 average time–frequency | Inspect the fixed 3–30-Hz view using the mean baseline |
+| Step 5.5 average power spectral density (PSD) | Inspect the fixed post-stimulus multitaper view |
+| Step 5.6 QC comparison | 30 complete `stimulus - stimulus_prestim` pairs and a schema-v2 result file |
+| Step 5.7 NRF comparison | The same 30 pairs for noxious `fglsCoef` and a schema-v2 result file |
+
+Before screening there are 62 epoch–channel items and 124 NRF rows. Subject
+31's true `stimulus` item contains the declared artefact and is the expected
+sole exclusion. Screening remains manual: no script makes that decision.
+If the displayed evidence or counts differ from those expected, stop and
+investigate. Do not alter data or exclusions merely to make the counts match.
+
+## Workflow reference
+
+The table maps this repository's five software stages to the clinical
+repositories. Each clinical README explains its additional source-preparation
+and downstream analysis stages.
+
+| Stage in `simple` | Purpose | Oxford / Strasbourg stage |
+| --- | --- | --- |
+| 1: `proc` | Inspect and preprocess data; construct paired epochs | 3 |
+| 2: `quant` | Calculate QC features and response estimates | 4 |
+| 3: `sum` | Assemble per-dataset and pooled summaries | 5 |
+| 4: `screen` | Record and apply human screening decisions | 6 |
+| 5: `check` | Describe retained outputs after screening | 7 |
+
+The paper describes five scientific steps: preprocessing and paired-epoch
+construction, QC description, response quantification, human screening, and
+post-screening descriptive checks. The software combines QC and response
+quantification in Step 2 and gives summary preparation its own Step 3.
+
+### Step 1: preprocessing
+
+Run these scripts in order:
+
+1. `step_1_proc_1_get_event_types.m`
+2. `step_1_proc_2_get_channels.m`
+3. `step_1_proc_3_add_processeds.m`
+4. `step_1_proc_4_preprocessing.m`
+
+This stage reads the dataset list, inventories event and channel labels,
+derives output paths, and preprocesses continuous data. It deletes unwanted
+events and adds offset events where configured, then creates true-event and
+internal-reference epochs. Processing records are stored in the `.set` files.
+
+Outputs are the updated dataset list, event and channel summaries in
+`data/info/event_types/` and `data/info/channels/`, and processed `.set` files
+under `data/processed/`.
+
+Before adapting Step 1.4 to another study, review its rereferencing,
+resampling, band-pass and line-noise filtering, event deletion, offset events,
+epoch windows, and baseline correction.
+
+### Step 2: quantification
+
+1. `step_2_quant_1_QC_feature_extraction.m`
+2. `step_2_quant_2_get_epochs.m`
+3. `step_2_quant_3_NRF_feature_extraction.m`
+
+This stage calculates QC features for selected channels, inventories epoch
+types, reports epochs containing multiple event labels, and fits the selected
+NRFs. QC and response annotations are stored in the processed `.set` files
+before screening. `NRFUtils.m` supports profile mapping and fitting.
+
+**Before Step 2.3**, inspect `data/info/epoch_types/multievent_epochs/` for
+unexpected labels or overlap between true-event and internal-reference
+epochs. Then enter the required profiles in
+`data/info/epoch_types/epoch_type_summary.csv`. Use the
+[mapping above](#map-event-types-to-nrf-profiles) for the tutorial.
+
+### Step 3: summarisation and pooling
+
+1. `step_3_sum_1_add_summaries.m`
+2. `step_3_sum_2_summarise_individual.m`
+3. `step_3_sum_3_summarise_pooled.m`
+4. `step_3_sum_4_plot_epochs.m`
+
+This stage exports the selected channels, event types, QC features, and NRF
+results, then combines them across datasets. It prepares waveform and QC
+evidence for screening and keeps response estimates linked for later use.
+Review these selections in the scripts when adapting the workflow.
+
+Each dataset produces four files: `<stem>_qc_features.csv`,
+`<stem>_nrf_features.csv`, `<stem>_epochs_index.csv`, and `<stem>_epochs.mat`.
+The pooled outputs are `pooled_eeg_qc_features.csv`,
+`pooled_eeg_nrf_features.csv`, `pooled_eeg_epochs.mat`, and the dataset-level
+`pooled_eeg_manifest.csv`.
+
+Step 3.4 displays pooled epochs with optional NRF overlays. Step 3.2 skips
+datasets with multi-event epoch labels, which is why the Step 2 inventory
+needs inspection before proceeding.
+
+### Step 4: human screening
+
+1. `step_4_screen_1_init_package.m` creates the screening package.
+2. `step_4_screen_2_viewer_rate_epochs.m` opens the mouse-driven viewer.
+3. `step_4_screen_3_apply_decisions.m` applies the saved decisions.
+
+Review each item using its waveform and QC evidence. Keep NRF magnitudes and
+downstream group or outcome information out of screening decisions. True-event
+and internal-reference items receive separate statuses.
+
+The package fixes the pooled waveforms and QC values used for review. It is
+immutable once created; decisions are saved separately and can be updated in
+the viewer. A package hash checks that decisions are applied to the correct
+data. Decision saves are atomic, so an interrupted save cannot leave a
+partially replaced decision file.
+
+The outputs in `data/summary/screening/` are:
+
+- `screening_package.mat`;
+- `screening_decisions.mat`;
+- `pooled_screened_eeg_epochs.mat`;
+- `pooled_screened_eeg_qc_features.csv`; and
+- `pooled_screened_eeg_nrf_features.csv`.
+
+Screened outputs carry `Exclude` flags. In the viewer, `File > Save PDF...`
+saves the current display, including all plots and the Navigator. Exporting
+that snapshot does not change decisions.
+
+### Step 5: post-screening descriptive checks
+
+1. `step_5_check_1_save_excluded_figs.m`
+2. `step_5_check_2_plot_included_epochs.m`
+3. `step_5_check_3_plot_average_ts.m`
+4. `step_5_check_4_plot_average_tf.m`
+5. `step_5_check_5_plot_average_psd.m`
+6. `step_5_check_6_sep_check_qc.m`
+7. `step_5_check_7_sep_check_nrf.m`
+
+Inspect excluded and retained items, average time series, time–frequency
+representations, power spectral densities, and paired QC and NRF comparisons.
+These descriptive checks do not change screening decisions.
+
+Step 5.1 writes a verified batch of excluded-item PNGs to
+`data/summary/screening/excluded_epochs/`, with rollback protection when
+replacing an existing batch. Steps 5.2–5.5 display figures and create workspace
+objects and logs; they do not save those figures automatically. Review the
+selected simple, NRF-shifted, or Woody averaging method and the time–frequency
+and PSD settings when adapting the workflow.
+
+Steps 5.6 and 5.7 form each complete `true - internal reference` difference
+within a recording and channel, then estimate its paired mean or median with
+a bias-corrected and accelerated (BCa) bootstrap interval. They do not combine
+recordings into participant-level observations. The event, NRF, region of
+interest (ROI), and overlay choices are example settings for this application.
+
+They save the paired results atomically using schema
+`simple-paired-separation-result-v2`:
+
+- `data/summary/screening/step_5_check_6_sep_check_qc_result.mat`;
+- `data/summary/screening/step_5_check_7_sep_check_nrf_result.mat`.
+
+## Configuration reference
+
+### Dataset list
+
+`data_lists/dataset_list.csv` is the central dataset list, also called the
+registry in the code. It is both an input and a file updated by the workflow.
+In addition to the identifiers and input paths, it gains columns such as
+`event_types`, `channels`, `path_processed`, `EEGfile_processed`, `epoch_types`,
+and `path_summary`.
+
+### NRF profiles and event mapping
+
+[`NRFs/nrf_config.ini`](NRFs/nrf_config.ini) defines named fitting profiles.
+Each specifies a template name, baseline length, maximum timing shift
+(`jitter`), channel labels, and one fitting-window start. Set either
+`projectionTimes_pre` or `projectionTimes_post`, leaving the other empty.
+The file's comments explain the units and required epoch coverage.
+
+`data/info/epoch_types/epoch_type_summary.csv` maps each discovered event type
+to profiles in that INI file. Its mapping columns are `early_NRF`,
+`noxious_NRF`, and `noxious_preterm_NRF`. A cell contains one profile name;
+leave it empty if that NRF family should not be fitted to the event type.
+For the fixed tutorial, use the supplied mapping and settings unchanged.
+
+### Bundled templates
+
+`NRFs/` contains `early_NRF_500Hz.mat`, `noxious_NRF_500Hz.mat`, and
+`noxious_preterm_NRF_500Hz.mat`. Each stores a real double column vector `NRF`
+and scalar `fs = 500`. Each template has mean zero and discrete L2 norm one
+within floating-point precision. The template is dimensionless, so its signed
+fitted coefficient has the EEG input's unit. That coefficient is not a peak
+EEG amplitude.
+
+The template and EEG sampling rates must match; the estimator does not
+resample templates. Template basenames resolve directly against this
+repository's `NRFs/` folder, rather than through the MATLAB search path.
+Explicit canonical MAT-file paths are supported where documented. Missing,
+malformed, or conflicting template identities stop the relevant operation.
+
+The tutorial fits two term-foot profiles at `Cz`. Before timing alignment,
+the early fit covers 100–350 ms (126 samples), and the later fit covers
+400–700 ms (151 samples), including both endpoints. Both use a 200 ms
+pre-event baseline and allow a shift of up to 100 ms in either direction.
+
+## Technical reference
+
+### Repository folders
+
+| Folder | Contents |
+| --- | --- |
+| `scripts/` | Numbered workflow scripts and `log_command_window.m` |
+| `functions/` | The helper functions used by those scripts |
+| `NRFs/` | Tracked templates and NRF configuration |
+| `data_lists/` | Local dataset lists and study spreadsheets |
+| `data/info/` | Event, channel, epoch, and multi-event inventories to inspect |
+| `data/summary/` | Per-dataset, pooled, screened, and descriptive outputs |
+| `data/logs/` | Per-script Command Window logs |
+| `tests/` | Synthetic test fixtures, a MATLAB test runner, and static checks |
+
+The tracked `.gitkeep` files preserve the empty `data/` and `data_lists/` folders
+in a clone. Generated data, logs, screening decisions, analysis outputs, and
+CSV/XLSX project lists remain local and are excluded from version control.
+
+### Dataset path rules
+
+Raw directories must be `data/raw` or descendants of it. Processed and
+summary directories must likewise remain under the exact `data/processed`
+and `data/summary` roots. Paths must be non-empty, relative to the project,
+and written with forward slashes. EEG filenames must be basenames with the exact
+lowercase `.set` extension. Processed targets and all four per-dataset
+summary targets must be unique.
+
+The validator rejects absolute paths, traversal components such as `..`,
+repeated separators, backslashes, filenames containing a path, and symbolic
+links that resolve outside the permitted roots.
+
+Every registry path is validated before a governed write to processed datasets
+or per-dataset summaries. This means the complete dataset list is checked
+before any stage derives or writes those targets. An invalid required path
+stops that stage before it changes the list, processed datasets, or summary
+outputs.
+
+### Function interfaces
+
+The main interfaces are `preproc(EEG, options)` for preprocessing,
+`quality_control_features` and its 11 `calc_*` functions for QC,
+`estimate_response(EEG, options)` for response estimation, `jittercorrect`
+for timing alignment, and `add_offset_events` for offset events. Other
+helpers support event handling, averaging, post-screening checks, and dataset
+path validation. The function help blocks describe their arguments and units.
+
+Steps 5.2 and 5.3 do not start EEGLAB or initialise a template search path.
+They resolve template names directly in `NRFs/`; Step 5.3 also accepts an
+explicit template path and checks the exact file supplied.
+
+### Logs and provenance
+
+`log_command_window.m` starts and stops each script's Command Window log in
+`data/logs/`. A new run replaces that script's previous log. Some processing
+and quantification steps also store structured records in
+`EEG.etc.simple.*` inside the `.set` files.
+
+The screening package contains a SHA-256 hash linking it to the pooled inputs
+and QC feature list. This verifies the association between data and decisions;
+it is not a history of every decision made in the viewer.
+
+## Tests
+
+The tests use synthetic fixtures and do not require or inspect clinical EEG
+data. Run the MATLAB suite in a separate session with MATLAB R2026a Update 4,
+EEGLAB 2026.0.0, and EEGLAB's `option_storedisk` and `option_parallel` options
+disabled. These version and option checks are enforced by the test runner.
+
+Replace the example paths with your installation locations:
 
 ```matlab
+simpleRoot = '/path/to/simple';
+eeglabRoot = '/path/to/eeglab';
 addpath(fullfile(simpleRoot, 'tests'), '-begin');
 results = run_all_tests(simpleRoot, eeglabRoot);
 assert(results.passed);
 ```
 
-`tests/run_static_checks.sh` builds an isolated tracked snapshot and
-checks repository shape, exact template and function inventories, the public
-API surface, ignore policy, self-contained paths, caller contracts and coverage
-manifest consistency without touching project data.
+`tests/run_all_tests.m` checks preprocessing, response estimation, timing
+alignment, all QC features, event helpers, template resolution and overlays,
+configuration and caching, dataset paths, processing records, removal of stale
+NRF results, dependency failures, and logging. It compares numerical outputs
+with saved expected results using strict `isequaln` equality.
 
-## Relationship to the methods paper
+From a terminal in the repository root, the static checks can be run with:
 
-This repository is the practical MATLAB implementation of the associated methodological framework. The repository is intended to stand on its own as a workflow, while the associated paper provides the broader methodological rationale, framing, and evaluation.
+```sh
+./tests/run_static_checks.sh
+```
+
+This creates an isolated snapshot of tracked files and checks the repository
+layout, template and function inventories, public interfaces, ignore rules,
+local paths, caller requirements, and coverage manifest. It does not touch
+project data.
+
+The associated methods paper provides the scientific rationale and evaluation;
+this guide documents how to use the software.
