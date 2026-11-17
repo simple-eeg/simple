@@ -106,7 +106,7 @@ eventtypeFilter = "stimulus"; % case-sensitive eventtype
 % 2B. Exclusion toggle (the only exclusion mechanism)
 useExclusionFlags = true;     % if true: drop items flagged Exclude; if false: ignore Exclude entirely
 
-% 2C. Wavelet settings (v1: minimal, with only VoicesPerOctave exposed)
+% 2C. Wavelet settings (VoicesPerOctave)
 voicesPerOctave = 12;         % common default; higher => denser frequency sampling (more compute)
 
 % 2D. Baseline-relative change settings

@@ -622,7 +622,7 @@ if averagingApproach == "nrfshifted"
             'MergeKeys', true, ...
             'Type', 'left');
 
-        hit = ~isnan(joined_chk.csv_exclude); % "joinable" candidates (as per your requirement)
+        hit = ~isnan(joined_chk.csv_exclude); % joinable candidates
 
         if any(hit)
             mism = hit & (logical(joined_chk.mat_exclude) ~= (joined_chk.csv_exclude == 1));

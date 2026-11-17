@@ -284,7 +284,7 @@ for r = 1:height(T)
             % Copy numeric/cell fields (with enforced 3-D data)
             ep.data                  = data_here;
             ep.times_ms              = E.times_ms;
-            % Your Step 3.2 saved channel labels under "channels"
+            % Step 3.2 saved channel labels under "channels"
             if isfield(E, 'channels')
                 ep.channels = E.channels;
             elseif isfield(E,'chanlabels')

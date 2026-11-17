@@ -16,7 +16,7 @@ function log_command_window(action)
 %
 % Assumptions:
 %   - This file lives in <project_root>/scripts/.
-%   - You are running scripts with current folder = scripts/.
+%   - The repository-local helper is on the MATLAB path.
 
 % -------------------- 0) Validate input ------------------------------
 if nargin ~= 1 || ~(ischar(action) || isstring(action))

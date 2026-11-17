@@ -1,20 +1,22 @@
 # SIMPLE Framework
 
-A MATLAB workflow for auditable, offline, group-level analysis of event-related EEG in an extreme low-redundancy regime.
+A MATLAB implementation of SIMPLE (Single-event Measurement Pipeline for EEG), a framework that links each event-channel item's EEG and quality-control (QC) evidence to its screening decision and retained analytical outputs.
+
+**Software credits:** [Marianne van der Vaart](https://github.com/mvandervaart), [Simon Marchant](https://github.com/simonmarchant), and [Luke Baxter](https://github.com/lukebax) contributed equally to the development of this software.
 
 **Associated methods paper:** [Add citation and link here when available]
 
 ## Repository overview
 
-This repository implements a structured workflow for event-related EEG in which the core low-redundancy processing unit is one analysed event–channel instance: one event and one channel, without trial averaging or multichannel redundancy. Group-level inference is a separate design layer and requires either one prespecified participant-level contribution or a method that accounts for repeated observations. In this regime, preprocessing choices, epoch definition, screening decisions, and dataset-level plausibility checks become unusually important.
+SIMPLE analyses one event occurrence at one channel, without trial averaging or interchangeable channels. Preprocessing, QC description, response quantification, human screening, and post-screening descriptive checks form the framework. Downstream analyses define participant contributions and account for repeated observations where applicable.
 
 The repository is written in MATLAB and is organised as a five-step workflow:
 
 1. **proc** – inspect raw data and create processed, epoched datasets
 2. **quant** – extract quality-control and response features
 3. **sum** – export and pool summaries
-4. **screen** – perform explicit, auditable epoch–channel screening
-5. **check** – run post-screening plausibility checks
+4. **screen** – record and apply human epoch–channel screening decisions
+5. **check** – run post-screening descriptive checks
 
 These five stages correspond directly to Steps 3–7 in `simple-oxford` and
 `simple-strasbourg`:
@@ -36,12 +38,12 @@ framework.
 This repository is for:
 
 - offline analysis of event-related EEG
-- group-level inference
+- preparing retained outputs for downstream analysis
 - settings with very limited within-participant redundancy
 - sparse channel configurations
-- workflows where transparent preprocessing, screening, and post-screening checks are part of the inferential logic
+- workflows that keep preprocessing, screening decisions, and retained outputs traceable
 
-A central use-case is neonatal noxious-event EEG, but the workflow is designed around the broader constraint structure rather than a single application domain alone.
+Neonatal noxious-evoked EEG is a central application; the framework may also be useful in other settings without repeated trials or interchangeable channels.
 
 ## What this repository is not for
 
@@ -176,8 +178,9 @@ summary directories must likewise be under the exact `data/processed` and
 paths: absolute paths, traversal components, repeated separators, backslashes,
 path-like filenames and symlink-based canonical escapes are rejected. Processed dataset
 targets and the four per-dataset summary targets must be unique.
-Every registry path is validated before a governed write, so an invalid row stops the stage
-before the registry, a dataset or a summary output is changed.
+Every registry path is validated before a governed write to processed datasets
+or per-dataset summaries, so an invalid row stops that stage before the registry,
+a dataset, or a summary output is changed.
 
 For example, one row could specify:
 
@@ -198,9 +201,7 @@ below.
 
 ### Running scripts from the `scripts` folder
 
-It is recommended to run the workflow from within the `scripts` folder, or otherwise ensure that `scripts/` is on the MATLAB path.
-
-This matters because the helper `log_command_window.m` lives in `scripts/` and is called at the start and end of the runnable scripts.
+Run scripts from the `scripts` folder or add that folder to the MATLAB path. Each script resolves its own repository root and binds the repository-local logging helper.
 
 ## Fixed synthetic-demonstrator route
 
@@ -282,11 +283,11 @@ and is investigated as evidence.
 
 Each runnable script starts and stops Command Window logging via `log_command_window('start')` and `log_command_window('stop')`.
 
-This creates a per-script log file in `data/logs/`, which is useful for:
+Each run replaces that script’s previous log in `data/logs/`. The log is useful for:
 
 - reviewing warnings and errors later
 - checking what happened during a run
-- preserving an audit trail of script output
+- retaining the current run’s script output
 
 ## Core input and configuration files
 
@@ -345,36 +346,15 @@ The workflow proceeds through five practical stages:
 2. quantify QC and response features
 3. export per-dataset summaries and pooled outputs
 4. screen epoch–channel items explicitly
-5. check whether the screened data behave plausibly
+5. describe the retained outputs after screening
 
-## Conceptual framework and how the workflow maps onto it
+## How the software stages implement SIMPLE
 
-The workflow maps onto the broader framework as follows.
+The manuscript’s five scientific steps are preprocessing and paired-epoch construction, QC description, response quantification, human screening, and post-screening descriptive checks. The software groups these operations into the five practical stages above: Step 1 preprocesses and constructs paired epochs; Step 2 calculates QC features and response estimates; Step 3 assembles linked summaries; Step 4 records and applies screening decisions; and Step 5 describes retained outputs.
 
-### Prerequisites
+Acquisition and study-specific source preparation precede SIMPLE. Participant-contribution rules and group inference apply to its retained outputs.
 
-Mainly implemented by **Step 1**.
-
-This stage establishes comparability across recordings through data audit, preprocessing, standardised epoching, and output conventions.
-
-### Core Workflow
-
-Implemented mainly by **Steps 1–4**.
-
-This includes:
-
-- defining true and internal-reference epochs
-- quantifying quality
-- quantifying response
-- explicit auditable screening
-
-### Post-core Guardrails
-
-Implemented by **Step 5**.
-
-This stage checks whether the screened dataset behaves plausibly before stronger interpretive claims are made.
-
-## Step 1: processing and prerequisites
+## Step 1: preprocessing
 
 Step 1 is the practical entry point for the workflow. It audits the raw datasets, standardises them, and creates the processed epoched datasets used downstream.
 
@@ -406,7 +386,7 @@ Scripts:
 
 ### Relation to the framework
 
-This stage instantiates much of the **Prerequisites** part of the framework and begins the **Core Workflow** by defining the true and internal-reference epoch structure.
+Preprocessing and construction of linked true-event and internal-reference epochs are part of SIMPLE.
 
 ### User configuration points
 
@@ -451,7 +431,7 @@ Supporting function:
 
 ### Relation to the framework
 
-This stage instantiates the **quantify quality** and **quantify response** parts of the Core Workflow.
+This stage provides QC description and response quantification before screening.
 
 ### Important user actions before NRF extraction
 
@@ -501,15 +481,15 @@ Pooled:
 
 ### Relation to the framework
 
-This stage is best understood as a practical summarisation layer. It is not a separate conceptual stage in the framework, but it makes the QC and NRF outputs usable for screening and post-screening checks.
+This practical summarisation stage assembles waveform and QC evidence for screening and keeps the corresponding response estimates available for later analysis.
 
 ### Important note
 
 `step_3_sum_2_summarise_individual.m` skips datasets with multi-event epoch labels. This is one reason the `multievent_epochs` outputs from Step 2 should be inspected before moving on.
 
-## Step 4: auditable screening
+## Step 4: human screening
 
-Step 4 implements explicit epoch–channel screening as an auditable workflow.
+Step 4 makes human epoch–channel screening transparent and traceable.
 
 Scripts:
 
@@ -523,6 +503,8 @@ Scripts:
 - opens a mouse-driven viewer for manual epoch–channel screening
 - saves screening decisions atomically
 - applies screening decisions to the pooled outputs
+
+Review each item using its waveform and QC evidence; keep NRF magnitudes and downstream group or outcome information out of screening decisions. True-event and internal-reference items receive separate statuses.
 
 The Step 4.2 viewer offers `File > Save PDF...` to save the complete current
 display, including all plots and the Navigator, to a PDF location chosen by
@@ -538,7 +520,7 @@ the user. Exporting this snapshot does not change the screening decisions.
 
 ### Relation to the framework
 
-This stage directly instantiates the framework’s **auditable screening** component.
+This stage records and applies the framework’s human screening decisions.
 
 ### Important points
 
@@ -553,9 +535,9 @@ This stage directly instantiates the framework’s **auditable screening** compo
 2. review and rate items in the screening viewer
 3. apply decisions to create screened outputs
 
-## Step 5: post-core guardrails
+## Step 5: post-screening descriptive checks
 
-Step 5 applies post-screening visual and quantitative checks to the screened pooled data.
+Step 5 describes the screened pooled data using visual and quantitative summaries. These checks do not change screening decisions.
 
 Scripts:
 
@@ -597,7 +579,7 @@ missing, malformed or conflicting template identity.
 
 ### Relation to the framework
 
-This stage instantiates the **Post-core Guardrails** part of the framework. It is intended to help determine whether the screened dataset behaves plausibly before stronger claims are made.
+This is the framework’s post-screening descriptive stage.
 
 ## Points where user input or inspection is required
 
@@ -646,7 +628,7 @@ Across the full workflow, the most important outputs are:
 - immutable screening package and mutable screening decisions
 - screened pooled outputs with `Exclude` flags
 - excluded-item PNGs
-- post-screening guardrail figures and console summaries
+- post-screening descriptive figures and console summaries
 - per-script log files in `data/logs/`
 
 ## Logging and provenance
@@ -673,10 +655,11 @@ correction, all QC features, event helpers, NRF resolution and overlays,
 configuration/cache behaviour, registry paths, effective preprocessing
 provenance, stale-NRF clearing, dependency failure modes and logging against a
 frozen synthetic oracle. Numerical outputs use strict `isequaln` comparison.
-Run it only in the accepted isolated MATLAB/EEGLAB test
-environment.
+Run it in an isolated MATLAB session using the versions listed above, with
+EEGLAB’s `option_storedisk` and `option_parallel` options disabled.
 
-From MATLAB, call the runner with explicit repository and EEGLAB roots:
+Set `simpleRoot` to the repository directory and `eeglabRoot` to the EEGLAB
+installation directory, then call the runner from MATLAB:
 
 ```matlab
 addpath(fullfile(simpleRoot, 'tests'), '-begin');
