@@ -6,7 +6,7 @@ quality-control (QC) information linked to the researcher's screening decision
 and the data retained for analysis. Each screened item is one event at one
 recording channel.
 
-**Software credits:** [Luke Baxter](https://github.com/lukebax), [Marianne van der Vaart](https://github.com/mvandervaart), and [Simon Marchant](https://github.com/simonmarchant) contributed equally to the development of this software.
+**Software credits:** [Luke Baxter](https://github.com/lukebax), [Marianne van der Vaart](https://github.com/mvandervaart), and [Simon Marchant](https://github.com/simonmarchant) contributed to the development of this software.
 
 **Associated methods paper:** citation and link to be added when available.
 
