@@ -148,7 +148,7 @@ list_candidate_untracked() {
     git -C "$repo_root" ls-files --others --exclude-standard -z | \
         while IFS= read -r -d '' relative_path; do
             case "$relative_path" in
-                .gitignore|LICENSE|README.md|NRFs/*|data/.gitkeep|data_lists/.gitkeep|functions/*|scripts/*|tests/*)
+                .github/workflows/*|.gitignore|LICENSE|README.md|NRFs/*|data/.gitkeep|data_lists/.gitkeep|functions/*|scripts/*|tests/*)
                     printf '%s\0' "$relative_path"
                     ;;
             esac
@@ -864,7 +864,7 @@ check_readme() {
 check_root_shape() {
     expected="$work_root/root.expected"
     actual="$work_root/root.actual"
-    printf '%s\n' .gitignore LICENSE NRFs README.md data data_lists functions scripts tests | LC_ALL=C sort > "$expected"
+    printf '%s\n' .github .gitignore LICENSE NRFs README.md data data_lists functions scripts tests | LC_ALL=C sort > "$expected"
     git -C "$candidate" ls-files | awk -F/ 'NF {print $1}' | LC_ALL=C sort -u > "$actual"
     diff -u "$expected" "$actual" || return 1
     printf 'exact documented top-level tracked contract'

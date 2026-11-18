@@ -71,6 +71,10 @@ The verified workflow environment is MATLAB R2026a Update 4 with EEGLAB
 CleanLine is optional; preprocessing uses the configured notch-filter route
 when CleanLine is not selected.
 
+The core workflow has no macOS requirement. Its full MATLAB/EEGLAB regression
+suite has been verified on macOS; Windows and Linux still need equivalent
+end-to-end validation. The source-check workflow covers all three platforms.
+
 ### Get the code and open it in MATLAB
 
 With Git installed, open a terminal in the folder where you want to keep the
@@ -393,6 +397,7 @@ pre-event baseline and allow a shift of up to 100 ms in either direction.
 | `data/summary/` | Per-dataset, pooled, screened, and descriptive outputs |
 | `data/logs/` | Per-script Command Window logs |
 | `tests/` | Synthetic test fixtures, a MATLAB test runner, and static checks |
+| `.github/workflows/` | Automated source checks on macOS, Windows, and Linux |
 
 The tracked `.gitkeep` files preserve the empty `data/` and `data_lists/` folders
 in a clone. Generated data, logs, screening decisions, analysis outputs, and
@@ -464,7 +469,20 @@ configuration and caching, dataset paths, processing records, removal of stale
 NRF results, dependency failures, and logging. It compares numerical outputs
 with saved expected results using strict `isequaln` equality.
 
-From a terminal in the repository root, the static checks can be run with:
+Filesystem-link tests use Java's native file API. If the filesystem does not
+support links, or a Windows account lacks symbolic-link privileges, those
+cases are reported as skipped rather than counted as passes. The result's
+registry count includes only cases that ran successfully.
+
+The processing safety source checks run on macOS, Windows, and Linux with
+Python 3, without MATLAB or clinical data. From the repository root:
+
+```sh
+python tests/check_processing_safety_contracts.py .
+```
+
+The complete static repository audit additionally requires Bash, Git, Python 3,
+and Unix command-line tools, including `shasum`. From the repository root:
 
 ```sh
 ./tests/run_static_checks.sh
