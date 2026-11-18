@@ -47,38 +47,12 @@ jobs:
             results = run_all_tests(repoRoot, eeglabRoot);
             assert(results.passed);
             disp(jsonencode(results));
-      - name: Diagnose the first preprocessing reference comparison
+      - name: Diagnose saved synthetic reference differences
         if: failure() && steps.regression.outcome == 'failure'
         uses: matlab-actions/run-command@v3
         with:
-          command: |
+          command: >-
             repoRoot = fullfile(getenv('GITHUB_WORKSPACE'), 'project');
             eeglabRoot = fullfile(getenv('GITHUB_WORKSPACE'), 'eeglab');
-            restoredefaultpath;
-            addpath(eeglabRoot, '-begin');
-            eeglab nogui;
-            addpath(fullfile(repoRoot, 'functions'), '-begin');
-            loaded = load(fullfile(repoRoot, 'tests', 'fixtures', 'simple_scientific_oracle_v1.mat'));
-            testCase = loaded.oracle.preproc(strcmp({loaded.oracle.preproc.name}, 'default_fill'));
-            captured = evalc('actual = preproc(testCase.input, testCase.options);');
-            fprintf('DIAGNOSTIC MATLAB: %s; architecture: %s; expected MATLAB: R2026a Update 4\n', version, computer);
-            fprintf('DIAGNOSTIC EEGLAB: %s; expected fixture EEGLAB: %s\n', eeg_getversion, testCase.output.etc.eeglabvers);
-            fprintf('DIAGNOSTIC exact output match: %d\n', isequaln(actual, testCase.output));
-            names = union(fieldnames(actual), fieldnames(testCase.output), 'stable');
-            for index = 1:numel(names)
-                field = names{index};
-                if ~isfield(actual, field) || ~isfield(testCase.output, field)
-                    fprintf('DIAGNOSTIC missing field: %s; actual: %d; expected: %d\n', field, isfield(actual, field), isfield(testCase.output, field));
-                elseif ~isequaln(actual.(field), testCase.output.(field))
-                    a = actual.(field);
-                    b = testCase.output.(field);
-                    fprintf('DIAGNOSTIC differing field: %s; actual class: %s; expected class: %s; actual size: %s; expected size: %s\n', field, class(a), class(b), mat2str(size(a)), mat2str(size(b)));
-                    if isnumeric(a) && isnumeric(b) && isequal(size(a), size(b))
-                        fprintf('DIAGNOSTIC max absolute difference: %.17g; actual max magnitude: %.17g; expected max magnitude: %.17g; NaN positions match: %d; Inf positions match: %d\n', max(abs(double(a(:)) - double(b(:))), [], 'omitnan'), max(abs(double(a(:))), [], 'omitnan'), max(abs(double(b(:))), [], 'omitnan'), isequal(isnan(a), isnan(b)), isequal(isinf(a), isinf(b)));
-                    else
-                        disp(a);
-                        disp(b);
-                    end
-                end
-            end
-            assert(isequaln(actual, testCase.output), 'The unchanged default_fill reference comparison still fails.');
+            addpath(fullfile(repoRoot, '.github', 'diagnostics'), '-begin');
+            diagnose_saved_oracles(repoRoot, eeglabRoot);
