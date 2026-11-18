@@ -25,7 +25,8 @@ Choose the repository for your task:
 | Repository | Purpose |
 | --- | --- |
 | **simple** (this repository) | Work through the synthetic example, understand the shared stages, or adapt the framework to another study. |
-| [simple-synthetic-eeg-generator](https://github.com/simple-eeg/simple-synthetic-eeg-generator) | Create the synthetic EEG files used by the example. |
+| [simple-data](https://github.com/simple-eeg/simple-data) | Download the ready-made synthetic example, inspect the saved statistical analyses, or find figure source data. |
+| [simple-synthetic-eeg-generator](https://github.com/simple-eeg/simple-synthetic-eeg-generator) | Generate the synthetic EEG example yourself. |
 | [simple-oxford](https://github.com/simple-eeg/simple-oxford) | Use the Oxford workflow, including source preparation and downstream analyses. The methods paper uses the Petal trial. |
 | [simple-strasbourg](https://github.com/simple-eeg/simple-strasbourg) | Use the NOCI-Prem workflow and its post-screening descriptive figure. |
 
@@ -71,9 +72,10 @@ The verified workflow environment is MATLAB R2026a Update 4 with EEGLAB
 CleanLine is optional; preprocessing uses the configured notch-filter route
 when CleanLine is not selected.
 
-The core workflow has no macOS requirement. Its full MATLAB/EEGLAB regression
-suite has been verified on macOS; Windows and Linux still need equivalent
-end-to-end validation. The source-check workflow covers all three platforms.
+The core workflow uses shared code for macOS, Windows, and Linux. Its full
+MATLAB/EEGLAB regression suite has been verified locally on macOS. Shared
+computational checks have also completed on Windows and Linux; complete
+workflow runs on those systems have not been verified.
 
 ### Get the code and open it in MATLAB
 
@@ -124,12 +126,15 @@ observations where applicable.
 
 ## Synthetic tutorial
 
-### Create and copy the data
+### Get and copy the data
 
-Follow the [generator's setup and generation instructions](https://github.com/simple-eeg/simple-synthetic-eeg-generator#first-time-setup).
-It creates a folder named `simple-synthetic-eeg-demo`. Copy its `raw/` folder
-to `simple/data/raw/` and its `dataset_list.csv` to
-`simple/data_lists/dataset_list.csv`.
+Download the [ready-made synthetic example](https://github.com/simple-eeg/simple-data/tree/main/synthetic-eeg),
+or create it using the [generator instructions](https://github.com/simple-eeg/simple-synthetic-eeg-generator#first-time-setup).
+Both routes provide a folder named `simple-synthetic-eeg-demo`.
+
+Create `simple/data/raw/` if needed, then copy the contents of the example's
+`raw/` folder into it. Copy `dataset_list.csv` to
+`simple/data_lists/dataset_list.csv`, retaining its filename.
 
 The fixed example contains:
 
@@ -452,6 +457,8 @@ The tests use synthetic fixtures and do not require or inspect clinical EEG
 data. Run the MATLAB suite in a separate session with MATLAB R2026a Update 4,
 EEGLAB 2026.0.0, and EEGLAB's `option_storedisk` and `option_parallel` options
 disabled. These version and option checks are enforced by the test runner.
+The full suite also requires the CleanLine plugin (`pop_cleanline`), even
+when the selected preprocessing route does not use it.
 
 Replace the example paths with your installation locations:
 
@@ -467,7 +474,7 @@ assert(results.passed);
 alignment, all QC features, event helpers, template resolution and overlays,
 configuration and caching, dataset paths, processing records, removal of stale
 NRF results, dependency failures, and logging. It compares numerical outputs
-with saved expected results using strict `isequaln` equality.
+with saved expected results, allowing the numerical rounding described below.
 
 Filesystem-link tests use Java's native file API. If the filesystem does not
 support links, or a Windows account lacks symbolic-link privileges, those
